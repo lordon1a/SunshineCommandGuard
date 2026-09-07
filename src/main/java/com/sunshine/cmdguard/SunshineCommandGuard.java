@@ -8,9 +8,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 /** Entry point for the command visibility and access control plugin. */
 public final class SunshineCommandGuard extends JavaPlugin {
 
-    // TODO: register this plugin at https://bstats.org/ (Add Service -> Bukkit)
-    //   and replace 0 with the real plugin id before the first public release.
-    private static final int BSTATS_PLUGIN_ID = 0;
+    // https://bstats.org/plugin/bukkit/SunshineCommandGuard/33904
+    private static final int BSTATS_PLUGIN_ID = 33904;
 
     private volatile GuardConfig config;
     private volatile GroupResolver resolver;
