@@ -1,5 +1,6 @@
 # SunshineCommandGuard
-# Filtreyi acmadan once gruplari gozden gecirin ve /cmdguard test ile dogrulayin.
+# Review your groups and verify with /cmdguard test BEFORE enabling the filter.
+# While `enabled` is false the plugin loads but changes nothing.
 enabled: false
 
 bypass-permission: "sunshine.cmdguard.bypass"
@@ -7,30 +8,25 @@ bypass-permission: "sunshine.cmdguard.bypass"
 privacy:
   plugins-command:
     enabled: false
-    message: "<gold>Sunshine Survival <grey>| <white>Sunucu bilgisi gizlidir."
+    message: "<red>Unknown command. Type <white>/help <red>for help."
     aliases: [plugins, pl, "bukkit:pl", "bukkit:plugins", ver, version, about, icanhasbukkit]
   help-command:
     enabled: false
-    message: "<yellow>Komutlar icin <white>/rehber <yellow>yazabilirsin."
-    aliases: [help, "?", "bukkit:help", "minecraft:help"]
+    message: "<yellow>Type <white>/help <yellow>for a list of commands."
+    aliases: ["?", "bukkit:help", "minecraft:help"]
 
 groups:
   default:
     priority: 0
-    blocked-message: "<red>Bilinmeyen komut. <grey>Yardim icin <white>/rehber"
+    blocked-message: "<red>Unknown command."
     commands:
-      - menu
-      - seviye
-      - rehber
-      - harita
-      - gelisim
-      - borsa
-      - market
-      - rtp
+      - help
+      - spawn
+      - msg
       - "regex:^(msg|tell|w|r|reply)$"
       - "!op"
       - "!stop"
-    # hidden: visible degil ama calisabilir komutlar (aliaslar buraya).
+    # hidden: runnable but not shown in tab-complete (put aliases here)
     hidden: []
     args: {}
 

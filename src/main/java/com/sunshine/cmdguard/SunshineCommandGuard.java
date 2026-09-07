@@ -8,6 +8,10 @@ import org.bukkit.plugin.java.JavaPlugin;
 /** Entry point for the command visibility and access control plugin. */
 public final class SunshineCommandGuard extends JavaPlugin {
 
+    // TODO: register this plugin at https://bstats.org/ (Add Service -> Bukkit)
+    //   and replace 0 with the real plugin id before the first public release.
+    private static final int BSTATS_PLUGIN_ID = 0;
+
     private volatile GuardConfig config;
     private volatile GroupResolver resolver;
     private volatile Map<String, Set<String>> pluginIndex;
@@ -20,6 +24,7 @@ public final class SunshineCommandGuard extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        new org.bstats.bukkit.Metrics(this, BSTATS_PLUGIN_ID);
         filteringSuspended = false;
         visibilityListener = new VisibilityListener(null, getLogger());
         executionListener = new ExecutionListener(null, null, getLogger());
