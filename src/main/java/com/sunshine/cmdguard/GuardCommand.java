@@ -245,18 +245,19 @@ public final class GuardCommand implements TabExecutor {
                 return true;
             }
             case "ungrant": {
-                if (args.length < 3) {
+                UngrantRequest req = parseUngrant(args);
+                if (req == null) {
                     sender.sendMessage("Usage: /cmdguard ungrant <player> [command]");
                     return true;
                 }
-                Player target = findPlayer(args[1]);
+                Player target = findPlayer(req.player());
                 if (target == null) {
-                    sender.sendMessage("Player offline: " + args[1]);
+                    sender.sendMessage("Player offline: " + req.player());
                     return true;
                 }
                 boolean removed;
-                if (args.length >= 4) {
-                    removed = plugin.getGrants().revoke(target.getUniqueId(), args[3]);
+                if (req.command() != null) {
+                    removed = plugin.getGrants().revoke(target.getUniqueId(), req.command());
                 } else {
                     removed = plugin.getGrants().revokeAll(target.getUniqueId()) > 0;
                 }
@@ -365,5 +366,22 @@ public final class GuardCommand implements TabExecutor {
             target = plugin.getServer().getPlayer(name);
         }
         return target;
+    }
+
+    /** Parsed ungrant form: command null means "all grants". */
+    record UngrantRequest(String player, String command) {}
+
+    /**
+     * Parses ungrant arguments (args[0] is the subcommand). Returns null for usage error.
+     * Exposed for testing.
+     */
+    static UngrantRequest parseUngrant(String[] args) {
+        if (args == null || args.length < 2 || args[1] == null || args[1].isEmpty()) {
+            return null;
+        }
+        if (args.length >= 3 && args[2] != null && !args[2].isEmpty()) {
+            return new UngrantRequest(args[1], args[2]);
+        }
+        return new UngrantRequest(args[1], null);
     }
 }

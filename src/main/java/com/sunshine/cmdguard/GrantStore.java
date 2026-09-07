@@ -28,8 +28,12 @@ public final class GrantStore {
         if (player == null || key.isEmpty() || durationMillis <= 0) {
             return;
         }
+        long expiry = now + durationMillis;
+        if (expiry < now) {
+            expiry = Long.MAX_VALUE;
+        }
         grants.computeIfAbsent(player, k -> new ConcurrentHashMap<>())
-                .put(key, now + durationMillis);
+                .put(key, expiry);
     }
 
     /** Returns true when a live grant covers this command (namespace-insensitive). */

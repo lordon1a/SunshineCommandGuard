@@ -1,9 +1,5 @@
 package com.sunshine.cmdguard;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
@@ -38,7 +34,7 @@ public final class UpdateChecker {
                     logger.info("SunshineCommandGuard " + latest + " is available"
                             + " (running " + currentVersion + ").");
                 }
-            } catch (Exception ex) {
+            } catch (Throwable ex) {
                 logger.fine("update check failed: " + ex.getMessage());
             }
         });
@@ -66,37 +62,59 @@ public final class UpdateChecker {
         return pickLatestVersion(body);
     }
 
-    /** Returns the highest version_number in a Modrinth version list, or null. */
+    /**
+     * Returns the highest version_number in a Modrinth version list, or null.
+     * Parsed by hand to avoid a JSON dependency in the shipped jar.
+     */
     static String pickLatestVersion(String json) {
         if (json == null || json.isEmpty()) {
             return null;
         }
-        JsonElement root;
-        try {
-            root = JsonParser.parseString(json);
-        } catch (Exception ex) {
-            return null;
-        }
-        if (!root.isJsonArray()) {
-            return null;
-        }
-        JsonArray arr = root.getAsJsonArray();
         String best = null;
-        for (JsonElement e : arr) {
-            if (!e.isJsonObject()) {
+        int i = 0;
+        while (true) {
+            int k = json.indexOf("\"version_number\"", i);
+            if (k < 0) {
+                break;
+            }
+            int colon = json.indexOf(':', k + 16);
+            if (colon < 0) {
+                break;
+            }
+            int j = colon + 1;
+            while (j < json.length() && Character.isWhitespace(json.charAt(j))) {
+                j++;
+            }
+            if (j >= json.length() || json.charAt(j) != '"') {
+                i = colon + 1;
                 continue;
             }
-            JsonObject o = e.getAsJsonObject();
-            if (!o.has("version_number") || !o.get("version_number").isJsonPrimitive()) {
-                continue;
+            StringBuilder sb = new StringBuilder();
+            j++;
+            boolean closed = false;
+            while (j < json.length()) {
+                char c = json.charAt(j);
+                if (c == '\\' && j + 1 < json.length()) {
+                    sb.append(json.charAt(j + 1));
+                    j += 2;
+                    continue;
+                }
+                if (c == '"') {
+                    closed = true;
+                    j++;
+                    break;
+                }
+                sb.append(c);
+                j++;
             }
-            String v = o.get("version_number").getAsString();
-            if (v == null || v.isEmpty()) {
-                continue;
+            if (!closed) {
+                break;
             }
-            if (best == null || compareVersions(best, v) < 0) {
+            String v = sb.toString();
+            if (!v.isEmpty() && (best == null || compareVersions(best, v) < 0)) {
                 best = v;
             }
+            i = j;
         }
         return best;
     }
