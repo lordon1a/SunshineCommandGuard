@@ -63,6 +63,7 @@ public final class VisibilityListener implements Listener {
             boolean sync = cfg != null && cfg.permissionSync();
             PrivacyRule pluginsRule = cfg == null ? null : cfg.pluginsCommand();
             PrivacyRule helpRule = cfg == null ? null : cfg.helpCommand();
+            AntiEnumerationConfig anti = cfg == null ? null : cfg.antiEnumeration();
             GrantStore grantStore = grants;
             Set<String> grantedSet = Set.of();
             if (grantStore != null) {
@@ -75,15 +76,15 @@ public final class VisibilityListener implements Listener {
             }
             Set<String> granted = grantedSet;
             Collection<String> commands = event.getCommands();
-            // Granted commands are kept even when invisible; everything else
-            // goes through the shared chain (privacy -> sync -> group list).
+            // Grants are kept for ordinary commands; namespaced grants remain
+            // hidden when anti-enumeration is active.
             commands.removeIf(cmd -> {
                 try {
                     String norm = CommandMatcher.normalize(cmd);
-                    Decision.Outcome o = Decision.check(new Decision.Board(
+                    Decision.Outcome o = Decision.checkVisibility(new Decision.Board(
                             pluginsRule, helpRule, sync,
                             current.requiredPermission(cmd), player::hasPermission,
-                            profile.visibleRules(), cmd, granted.contains(norm)));
+                            profile.visibleRules(), cmd, granted.contains(norm), anti));
                     return o != Decision.Outcome.ALLOW && o != Decision.Outcome.GRANTED;
                 } catch (Exception ex) {
                     return false;
@@ -97,7 +98,8 @@ public final class VisibilityListener implements Listener {
                 }
             }
             for (String g : granted) {
-                if (!present.contains(g)) {
+                if (!present.contains(g)
+                        && (anti == null || !anti.hidesNamespacedCommand(g))) {
                     commands.add(g);
                 }
             }

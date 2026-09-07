@@ -22,7 +22,21 @@ public final class Diagnose {
                         int warnings,
                         int validation,
                         int grants,
-                        boolean syncOn) {}
+                        boolean syncOn,
+                        boolean antiEnumerationEnabled,
+                        int visibleNamespaced,
+                        boolean serverSendsNamespaced) {
+
+        /** Backward-compatible input for reports without anti-enumeration data. */
+        public Input(boolean enabled, boolean suspended, boolean bypass,
+                     boolean selfOp, String worldName, List<String> groups,
+                     int visibleOf, int runnableOf, int totalCommands,
+                     int warnings, int validation, int grants, boolean syncOn) {
+            this(enabled, suspended, bypass, selfOp, worldName, groups,
+                    visibleOf, runnableOf, totalCommands, warnings, validation,
+                    grants, syncOn, false, 0, true);
+        }
+    }
 
     private Diagnose() {}
 
@@ -76,6 +90,14 @@ public final class Diagnose {
         }
         if (in.syncOn()) {
             out.add("permission-sync: ON (Bukkit nodes also required).");
+        }
+        if (in.antiEnumerationEnabled()) {
+            out.add("Anti-enumeration: ON (visible namespaced commands: "
+                    + in.visibleNamespaced() + ").");
+            if (in.serverSendsNamespaced()) {
+                out.add("WARNING: spigot.yml commands.send-namespaced=true; set it to false"
+                        + " for defense in depth.");
+            }
         }
         return out;
     }

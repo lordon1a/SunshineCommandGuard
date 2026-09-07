@@ -53,6 +53,24 @@ final class GuardConfigSchemaTest {
     }
 
     @Test
+    void antiEnumerationKeysParsed() {
+        GuardConfig cfg = load(BASE
+                + "anti-enumeration:\n"
+                + "  enabled: true\n"
+                + "  hide-namespaced-commands: false\n"
+                + "  block-namespaced-execution: true\n"
+                + "  block-completion-probes: false\n"
+                + "  namespace-allowlist: [minecraft, PAPER]\n");
+        assertTrue(cfg.antiEnumeration().enabled());
+        assertFalse(cfg.antiEnumeration().hideNamespacedCommands());
+        assertTrue(cfg.antiEnumeration().blockNamespacedExecution());
+        assertFalse(cfg.antiEnumeration().blockCompletionProbes());
+        assertEquals(java.util.Set.of("minecraft", "paper"),
+                cfg.antiEnumeration().namespaceAllowlist());
+        assertTrue(cfg.warnings().isEmpty());
+    }
+
+    @Test
     void oldConfigKeepsDefaults() {
         GuardConfig cfg = load(BASE);
         assertTrue(cfg.enabled());
@@ -63,6 +81,8 @@ final class GuardConfigSchemaTest {
         assertTrue(cfg.updateChecker().enabled());
         assertEquals("", cfg.updateChecker().modrinthId());
         assertFalse(cfg.updateChecker().configured(), "empty id means inert");
+        assertTrue(cfg.antiEnumeration().enabled(), "old configs get secure defaults");
+        assertTrue(cfg.antiEnumeration().hideNamespacedCommands());
         assertEquals(List.of(), cfg.groups().get("default").worlds());
         assertTrue(cfg.warnings().isEmpty());
     }

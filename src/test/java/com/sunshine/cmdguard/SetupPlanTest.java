@@ -38,6 +38,9 @@ final class SetupPlanTest {
         assertTrue(cfg.getStringList("groups.default.inherit").isEmpty(), "inherit cleared");
         assertFalse(cfg.getBoolean("privacy.plugins-command.enabled"));
         assertFalse(cfg.getBoolean("permission-sync"));
+        assertTrue(cfg.getBoolean("anti-enumeration.enabled"));
+        assertTrue(cfg.getBoolean("anti-enumeration.hide-namespaced-commands"));
+        assertTrue(cfg.getBoolean("anti-enumeration.block-completion-probes"));
         assertFalse(cfg.getBoolean("enabled"));
     }
 

@@ -18,6 +18,7 @@ public final class GuardConfig {
     private final String bypassPermission;
     private final PrivacyRule pluginsCommand;
     private final PrivacyRule helpCommand;
+    private final AntiEnumerationConfig antiEnumeration;
     private final boolean permissionSync;
     private final MonitoringConfig monitoring;
     private final UpdateCheckerConfig updateChecker;
@@ -26,6 +27,7 @@ public final class GuardConfig {
 
     private GuardConfig(boolean enabled, String bypassPermission,
                         PrivacyRule pluginsCommand, PrivacyRule helpCommand,
+                        AntiEnumerationConfig antiEnumeration,
                         boolean permissionSync, MonitoringConfig monitoring,
                         UpdateCheckerConfig updateChecker,
                         Map<String, GroupDef> groups, List<String> warnings) {
@@ -33,6 +35,7 @@ public final class GuardConfig {
         this.bypassPermission = bypassPermission;
         this.pluginsCommand = pluginsCommand;
         this.helpCommand = helpCommand;
+        this.antiEnumeration = antiEnumeration;
         this.permissionSync = permissionSync;
         this.monitoring = monitoring;
         this.updateChecker = updateChecker;
@@ -58,6 +61,11 @@ public final class GuardConfig {
     /** Returns the help-command privacy rule. */
     public PrivacyRule helpCommand() {
         return helpCommand;
+    }
+
+    /** Returns the client-side command-enumeration protections. */
+    public AntiEnumerationConfig antiEnumeration() {
+        return antiEnumeration;
     }
 
     /** When true, commands also require their own Bukkit permission node. */
@@ -94,6 +102,7 @@ public final class GuardConfig {
         if (cfg == null) {
             warnings.add("no 'default' group defined; filtering disabled");
             return new GuardConfig(false, defaultBypass, emptyPlugins, emptyHelp,
+                    AntiEnumerationConfig.defaults(),
                     false, MonitoringConfig.disabled(), UpdateCheckerConfig.defaults(),
                     Map.of(), warnings);
         }
@@ -106,11 +115,13 @@ public final class GuardConfig {
 
         PrivacyRule pluginsCommand = readPrivacy(cfg, "privacy.plugins-command");
         PrivacyRule helpCommand = readPrivacy(cfg, "privacy.help-command");
+        AntiEnumerationConfig antiEnumeration = readAntiEnumeration(cfg, warnings);
         boolean permissionSync = cfg.getBoolean("permission-sync", false);
         MonitoringConfig monitoring = readMonitoring(cfg);
         UpdateCheckerConfig updateChecker = readUpdateChecker(cfg);
 
-        Set<String> allowedTop = Set.of("enabled", "bypass-permission", "privacy", "groups",
+        Set<String> allowedTop = Set.of("enabled", "bypass-permission", "privacy",
+                "anti-enumeration", "groups",
                 "permission-sync", "monitoring", "update-checker");
         for (String key : cfg.getKeys(false)) {
             if (!allowedTop.contains(key)) {
@@ -174,7 +185,39 @@ public final class GuardConfig {
         }
 
         return new GuardConfig(enabled, bypass, pluginsCommand, helpCommand,
+                antiEnumeration,
                 permissionSync, monitoring, updateChecker, groups, warnings);
+    }
+
+    /** Reads anti-enumeration settings with secure defaults for old configs. */
+    private static AntiEnumerationConfig readAntiEnumeration(FileConfiguration cfg,
+                                                              List<String> warnings) {
+        String path = "anti-enumeration";
+        boolean enabled = cfg.getBoolean(path + ".enabled", true);
+        boolean hideNamespaces = cfg.getBoolean(path + ".hide-namespaced-commands", true);
+        boolean blockNamespaces = cfg.getBoolean(path + ".block-namespaced-execution", true);
+        boolean blockProbes = cfg.getBoolean(path + ".block-completion-probes", true);
+        Set<String> allowlist = new LinkedHashSet<>();
+        for (String raw : cfg.getStringList(path + ".namespace-allowlist")) {
+            String value = raw == null ? "" : raw.trim();
+            if (value.isEmpty()) {
+                continue;
+            }
+            if (value.contains(":")) {
+                warnings.add(path + ".namespace-allowlist contains invalid namespace '"
+                        + raw + "'");
+                continue;
+            }
+            String normalized = AntiEnumerationConfig.normalizeNamespace(value);
+            if (normalized.isEmpty()) {
+                warnings.add(path + ".namespace-allowlist contains invalid namespace '"
+                        + raw + "'");
+                continue;
+            }
+            allowlist.add(normalized);
+        }
+        return new AntiEnumerationConfig(enabled, hideNamespaces, blockNamespaces,
+                blockProbes, allowlist);
     }
 
     /** Reads the monitoring section with safe defaults (everything off). */

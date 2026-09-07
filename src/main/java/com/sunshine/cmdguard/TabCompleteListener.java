@@ -10,6 +10,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.server.TabCompleteEvent;
 
 /** Filters server-side tab completions using cached profiles. */
 public final class TabCompleteListener implements Listener {
@@ -66,6 +67,11 @@ public final class TabCompleteListener implements Listener {
             if (buffer == null) {
                 return;
             }
+            AntiEnumerationConfig anti = config == null ? null : config.antiEnumeration();
+            if (event.isCommand() && anti != null && anti.blocksCompletionBuffer(buffer)) {
+                event.setCancelled(true);
+                return;
+            }
             String stripped = buffer.startsWith("/") ? buffer.substring(1) : buffer;
             List<String> completions = event.getCompletions();
             if (completions == null || completions.isEmpty()) {
@@ -93,6 +99,9 @@ public final class TabCompleteListener implements Listener {
                         }
                     }
                     String toMatch = ws >= 0 ? cand.substring(0, ws) : cand;
+                    if (anti != null && anti.hidesNamespacedCommand(toMatch)) {
+                        continue;
+                    }
                     if (isGranted(id, toMatch)
                             || (CommandMatcher.matches(profile.visibleRules(), toMatch)
                             && !syncDenies(current, player, toMatch))) {
@@ -125,6 +134,40 @@ public final class TabCompleteListener implements Listener {
         } catch (Throwable ex) {
             try {
                 logger.warning("tab complete filter failed: " + ex.getMessage());
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    /**
+     * Protects the synchronous Bukkit completion path as well. A client can
+     * send a completion request directly even when the command root was
+     * removed from its command tree.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onSyncTabComplete(TabCompleteEvent event) {
+        try {
+            if (!(event.getSender() instanceof Player player) || !event.isCommand()) {
+                return;
+            }
+            GuardConfig currentConfig = config;
+            AntiEnumerationConfig anti = currentConfig == null
+                    ? null : currentConfig.antiEnumeration();
+            if (anti == null || !anti.blocksCompletionBuffer(event.getBuffer())) {
+                return;
+            }
+            GroupResolver current = resolver;
+            if (current == null) {
+                return;
+            }
+            // This event is synchronous, so resolving an uncached player is safe.
+            if (current.resolve(player) != null) {
+                event.setCompletions(List.of());
+                event.setCancelled(true);
+            }
+        } catch (Throwable ex) {
+            try {
+                logger.warning("sync tab complete filter failed: " + ex.getMessage());
             } catch (Exception ignored) {
             }
         }

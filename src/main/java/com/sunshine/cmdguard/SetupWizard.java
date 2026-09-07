@@ -114,11 +114,11 @@ public final class SetupWizard {
         send(player, "<green>Applied: base=" + session.base()
                 + ", privacy=" + onOff(Boolean.TRUE.equals(session.privacy()))
                 + ", permission-sync=" + onOff(Boolean.TRUE.equals(session.sync()))
-                + ". Config reloaded.");
+                + ", anti-enumeration=ON. Config reloaded.");
         if (wasOn) {
             send(player, "<yellow>The filter was ON — it is now OFF for safe verification.");
         }
-        send(player, "<gray>Only the default group, privacy and sync were touched."
+        send(player, "<gray>Only the default group, privacy, sync and anti-enumeration settings were touched."
                 + " (Note: saving reset the file's comments.)");
         send(player, "<yellow>Verify with <click:suggest_command:'/cmdguard test '>"
                 + "/cmdguard test <player> <command></click> before enabling the filter.");
@@ -204,7 +204,8 @@ public final class SetupWizard {
     private static String questionPrivacy() {
         return "<gold>CmdGuard setup (2/3): hide /plugins, /ver and help aliases"
                 + " (?, bukkit:help) behind custom messages?\n"
-                + "<gray>Plain /help stays visible as the fallback pointer.\n"
+                + "<gray>Plain /help stays visible as the fallback pointer."
+                + " The anti-enumeration shield is enabled automatically.\n"
                 + "<click:run_command:'/cmdguard setup pick privacy yes'>"
                 + "<green>[Yes]</green></click>  "
                 + "<click:run_command:'/cmdguard setup pick privacy no'>"

@@ -34,6 +34,17 @@ privacy:
     message: "<yellow>Type <white>/help <yellow>for a list of commands."
     aliases: ["?", "bukkit:help", "minecraft:help"]
 
+# Anti-enumeration protects against clients that scan namespaced commands or
+# request /version completions directly, even when those roots are hidden.
+# This section is active only while the top-level filter is enabled.
+anti-enumeration:
+  enabled: true
+  hide-namespaced-commands: true
+  block-namespaced-execution: true
+  block-completion-probes: true
+  # Add a namespace only when players genuinely need its namespaced label.
+  namespace-allowlist: []
+
 groups:
   default:
     priority: 0

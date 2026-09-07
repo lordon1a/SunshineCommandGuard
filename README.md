@@ -37,6 +37,9 @@ closes both doors without touching a single permission node you already have in 
 - **Server privacy** — hides `/plugins`, `/pl`, `/ver`, `/version`, `/about` and the `?`
   help aliases behind a message you write (plain `/help` stays: blocked players are sent
   there).
+- **Anti-enumeration shield** — removes namespaced command labels, blocks direct namespaced
+  execution, and filters direct `/version`/`/plugins` completion probes used by client-side
+  plugin scanners. Explicit namespace exceptions are available for compatibility.
 - **Per-group profiles** — groups resolved from LuckPerms permissions
   (`sunshine.cmdguard.group.<name>`), with `inherit` and `priority` so a `staff` group can
   extend `vip`, which extends `default`, without repeating a single line.
@@ -91,7 +94,7 @@ privacy messages are that server's own text, fully customizable in `config.yml`.
 
 ## Installation
 
-1. Drop `SunshineCommandGuard-1.2.0.jar` into your `plugins/` folder and start the server once
+1. Drop `SunshineCommandGuard-1.3.0.jar` into your `plugins/` folder and start the server once
    (this creates the default `config.yml`).
 2. Run `/cmdguard setup` in-game and answer three questions — or run `/cmdguard generate`
    and copy the useful parts of `config.generated.yml` into `config.yml`.
@@ -169,6 +172,21 @@ privacy:
     aliases: ["?", "bukkit:help", "minecraft:help"]
 ```
 
+Client-side plugin scanner protection — hide namespaced aliases and block direct completion
+probes. This section is active only when the top-level filter is enabled:
+
+```yaml
+anti-enumeration:
+  enabled: true
+  hide-namespaced-commands: true
+  block-namespaced-execution: true
+  block-completion-probes: true
+  namespace-allowlist: []
+```
+
+For defense in depth, set `commands.send-namespaced: false` in `spigot.yml` as well. The
+plugin reports this server setting in `/cmdguard diagnose`.
+
 ## Copy-paste recipes
 
 EssentialsX survival server — the usual player commands, nothing else:
@@ -245,9 +263,13 @@ groups:
 namespaced labels (`essentials:heal`) also match their base name (`heal`). `!entry` denies (deny
 always wins over any allow), `regex:<pattern>` allows full-match patterns, `plugin:<Name>`
 expands to every command that plugin registers. `hidden` entries are runnable but never
-suggested in tab-complete — use them for aliases you don't want advertised.
+suggested in tab-complete — use them for aliases you don't want advertised. When
+When `anti-enumeration.hide-namespaced-commands` is enabled, namespaced labels are hidden from
+the command tree and tab completion. When `anti-enumeration.block-namespaced-execution` is
+enabled, direct execution is also blocked unless the namespace is listed in `namespace-allowlist`.
 
-Optional top-level modes (all backward compatible — old configs load unchanged):
+Optional top-level modes (old configs load safely; a missing anti-enumeration section receives
+secure defaults):
 
 ```yaml
 # Also require each command's own Bukkit permission node.
@@ -291,8 +313,8 @@ groups:
 | `/cmdguard generate` | `sunshine.cmdguard.admin` | Write a review-ready starter config to `config.generated.yml` |
 | `/cmdguard grant <player> <command> <30s\|10m\|2h\|1d>` | `sunshine.cmdguard.admin` | Temporarily allow one command (memory-only, lost on restart) |
 | `/cmdguard ungrant <player> [command]` | `sunshine.cmdguard.admin` | Revoke one or all temporary grants |
-| `/cmdguard setup` | `sunshine.cmdguard.admin` | Interactive chat setup (players only): starter list, privacy, sync |
-| `/cmdguard diagnose [player]` | `sunshine.cmdguard.admin` | Common-mistake check with live visible/runnable counts |
+| `/cmdguard setup` | `sunshine.cmdguard.admin` | Interactive chat setup (players only): starter list, privacy, sync, anti-enumeration |
+| `/cmdguard diagnose [player]` | `sunshine.cmdguard.admin` | Common-mistake check with live counts and anti-enumeration status |
 
 | Permission | Default | Description |
 | --- | --- | --- |
@@ -317,6 +339,12 @@ only removes a command from tab-complete suggestions; it's a different list from
 which controls whether the command runs at all. Use `hidden` for aliases you don't want to
 advertise, and the plain block list for commands you actually want to deny.
 
+**Can a client still enumerate plugins?** The anti-enumeration shield removes namespaced
+command labels and blocks the common direct completion probes. It is not a guarantee that
+plugin behavior can never be inferred; public commands, messages, resource-pack data and
+other server behavior can still reveal information. Do not rely on client-brand detection,
+because modified clients can spoof their brand.
+
 **Does this affect server performance?** Filtering runs on join and on `/cmdguard reload`, not
 on every keystroke — the client's command tree is rebuilt once per player, not recomputed for
 every tab press.
@@ -326,7 +354,7 @@ player resolves to the `default` group.
 
 ## Compatibility
 
-Built against the **Paper 1.21.4 API (Java 21)**. Tested on a clean Paper 26.2 server (v1.2.0:
+Built against the **Paper 1.21.4 API (Java 21)**. Tested on a clean Paper 26.2 server (v1.3.0:
 clean enable, validator flags unregistered template entries). The same jar
 runs on **Folia**. Older/newer server versions are untested — please open an issue with what
 works or doesn't on your setup.
@@ -334,8 +362,8 @@ works or doesn't on your setup.
 ## Building from source
 
 ```powershell
-.\gradlew.bat build   # needs JDK 21, output: build/libs/SunshineCommandGuard-1.2.0.jar
-.\gradlew.bat test    # 106 unit tests (JUnit 5)
+.\gradlew.bat build   # needs JDK 21, output: build/libs/SunshineCommandGuard-1.3.0.jar
+.\gradlew.bat test    # unit tests (JUnit 5)
 ```
 
 The uploaded jar must be the `shadowJar` output (`build/libs/...`), which bundles bStats

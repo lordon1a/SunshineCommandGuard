@@ -79,6 +79,7 @@ public final class ExecutionListener implements Listener {
         }
         PrivacyRule pluginsRule = currentConfig.pluginsCommand();
         PrivacyRule helpRule = currentConfig.helpCommand();
+        AntiEnumerationConfig anti = currentConfig.antiEnumeration();
         String required;
         try {
             required = currentResolver.requiredPermission(token);
@@ -87,7 +88,7 @@ public final class ExecutionListener implements Listener {
         }
         Decision.Outcome verdict = Decision.check(new Decision.Board(
                 pluginsRule, helpRule, currentConfig.permissionSync(), required,
-                player::hasPermission, profile.rules(), token, granted));
+                player::hasPermission, profile.rules(), token, granted, anti));
         switch (verdict) {
             case ALLOW, GRANTED -> {
                 return;
@@ -101,7 +102,7 @@ public final class ExecutionListener implements Listener {
                 reportBlocked(player, token, "privacy");
                 return;
             }
-            case DENY_SYNC, DENY_LIST -> {
+            case DENY_NAMESPACE, DENY_SYNC, DENY_LIST -> {
                 event.setCancelled(true);
                 String blocked = profile.blockedMessage();
                 if (blocked != null && !blocked.isEmpty()) {
@@ -112,7 +113,9 @@ public final class ExecutionListener implements Listener {
                     }
                 }
                 reportBlocked(player, token,
-                        verdict == Decision.Outcome.DENY_SYNC ? "permission-sync" : "group-list");
+                        verdict == Decision.Outcome.DENY_NAMESPACE ? "namespace-protection"
+                                : verdict == Decision.Outcome.DENY_SYNC
+                                ? "permission-sync" : "group-list");
                 return;
             }
         }

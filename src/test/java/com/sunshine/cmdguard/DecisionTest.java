@@ -72,6 +72,22 @@ final class DecisionTest {
     }
 
     @Test
+    void namespaceProtectionRunsBeforeGrantForUnknownNamespaces() {
+        Decision.Board b = new Decision.Board(null, null, false,
+                null, p -> false, allow("fly"), "essentials:fly", true,
+                AntiEnumerationConfig.defaults());
+        assertEquals(Decision.Outcome.DENY_NAMESPACE, Decision.check(b));
+    }
+
+    @Test
+    void privacyAliasKeepsItsPrivacyVerdict() {
+        Decision.Board b = new Decision.Board(privacy("plugins"), null, false,
+                null, p -> false, allow("plugins"), "bukkit:plugins", false,
+                AntiEnumerationConfig.defaults());
+        assertEquals(Decision.Outcome.DENY_PRIVACY, Decision.check(b));
+    }
+
+    @Test
     void secondRuleCounts() {
         Decision.Board b = new Decision.Board(null, privacy("heal"), false,
                 null, p -> false, allow("heal"), "heal", false);

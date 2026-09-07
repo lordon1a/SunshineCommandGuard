@@ -1,5 +1,5 @@
 name: SunshineCommandGuard
-version: 1.2.0
+version: 1.3.0
 main: com.sunshine.cmdguard.SunshineCommandGuard
 api-version: '1.21'
 author: Sunshine

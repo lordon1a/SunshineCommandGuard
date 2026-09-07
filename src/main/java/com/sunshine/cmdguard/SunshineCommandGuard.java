@@ -1,10 +1,12 @@
 package com.sunshine.cmdguard;
 
+import java.io.File;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import net.kyori.adventure.text.Component;
 import org.bukkit.World;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -184,6 +186,27 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
     /** Validation warnings from the last reload (typos, unknown plugins/worlds). */
     public int getLastValidationWarnings() {
         return lastValidationWarnings;
+    }
+
+    /**
+     * Reads Paper/Spigot's namespace-command setting for diagnostics.
+     * Missing files and invalid values use Paper's documented default: true.
+     */
+    public boolean serverSendsNamespacedCommands() {
+        try {
+            File dataFolder = getDataFolder();
+            File serverRoot = dataFolder == null ? null : dataFolder.getParentFile();
+            serverRoot = serverRoot == null ? null : serverRoot.getParentFile();
+            File spigot = serverRoot == null ? null : new File(serverRoot, "spigot.yml");
+            if (spigot == null || !spigot.isFile()) {
+                return true;
+            }
+            return YamlConfiguration.loadConfiguration(spigot)
+                    .getBoolean("commands.send-namespaced", true);
+        } catch (Exception ex) {
+            getLogger().fine("could not read commands.send-namespaced: " + ex.getMessage());
+            return true;
+        }
     }
 
     /** Returns the resolver even when suspended; for admin diagnostics. */

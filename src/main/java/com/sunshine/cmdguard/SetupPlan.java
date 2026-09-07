@@ -55,7 +55,7 @@ public final class SetupPlan {
         return base;
     }
 
-    /** Applies the plan: default group (unless custom), privacy, permission-sync.
+    /** Applies the plan: default group (unless custom), privacy, anti-enumeration and permission-sync.
      * Clears default inherit so a stale parent can't leak commands in.
      * Turns a live filter OFF for safe verification.
      * @return true when the filter was on and got turned off. */
@@ -83,6 +83,11 @@ public final class SetupPlan {
         cfg.set("privacy.help-command.message",
                 "<yellow>Type <white>/help <yellow>for a list of commands.");
         cfg.set("privacy.help-command.aliases", HELP_ALIASES);
+        cfg.set("anti-enumeration.enabled", true);
+        cfg.set("anti-enumeration.hide-namespaced-commands", true);
+        cfg.set("anti-enumeration.block-namespaced-execution", true);
+        cfg.set("anti-enumeration.block-completion-probes", true);
+        cfg.set("anti-enumeration.namespace-allowlist", List.of());
         cfg.set("permission-sync", sync);
         return wasOn;
     }

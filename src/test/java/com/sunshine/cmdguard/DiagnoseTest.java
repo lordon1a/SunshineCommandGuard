@@ -25,6 +25,17 @@ final class DiagnoseTest {
     }
 
     @Test
+    void antiEnumerationStatusAndServerWarningAreReported() {
+        Diagnose.Input in = new Diagnose.Input(true, false, false, false, "world",
+                List.of("default"), 5, 5, 100, 0, 0, 0, false,
+                true, 2, true);
+        List<String> lines = Diagnose.report(in);
+        assertTrue(lines.stream().anyMatch(l -> l.contains("Anti-enumeration: ON")));
+        assertTrue(lines.stream().anyMatch(l -> l.contains("visible namespaced commands: 2")));
+        assertTrue(lines.stream().anyMatch(l -> l.contains("send-namespaced=true")));
+    }
+
+    @Test
     void filterOff() {
         Diagnose.Input in = new Diagnose.Input(false, false, false, false, "world",
                 List.of("default"), 0, 0, 0, 0, 0, 0, false);

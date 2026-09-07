@@ -2,6 +2,30 @@
 
 All notable changes to SunshineCommandGuard are documented here.
 
+## [1.3.0] - 2026-09-07
+
+### Added
+
+- Added the anti-enumeration shield for client-side plugin scanners such as Meteor.
+- Added configurable namespace protection: hide namespaced command labels, block direct
+  namespaced execution, and allow explicit namespace exceptions when compatibility requires it.
+- Added direct completion-probe protection for `/plugins`, `/pl`, `/version`, `/ver`, `/about`,
+  and related namespaced aliases through both Paper completion paths.
+- Added `/cmdguard diagnose` reporting for visible namespaced commands and the server's
+  `commands.send-namespaced` setting.
+
+### Fixed
+
+- Fixed the namespace fallback allowing namespaced command labels to remain visible when the
+  unnamespaced base command was allowed.
+- Added tests that model the command-tree namespace scan used by common client scanners.
+
+### Verification
+
+- Existing tests plus the new anti-enumeration coverage pass on the Paper 1.21.4 API.
+- The release remains fail-open for unexpected plugin errors; explicit namespace protection
+  only applies to players who are not OP or bypass-authorized.
+
 ## [1.2.0] - 2026-09-07
 
 ### Added
@@ -47,5 +71,6 @@ All notable changes to SunshineCommandGuard are documented here.
 - Initial public release.
 
 [1.2.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.2.0
+[1.3.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.3.0
 [1.1.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.1.0
 [1.0.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.0.0

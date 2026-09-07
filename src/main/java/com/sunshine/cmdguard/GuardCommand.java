@@ -105,6 +105,10 @@ public final class GuardCommand implements TabExecutor {
                         profile = null;
                     }
                 }
+                AntiEnumerationConfig anti = cfg == null ? null : cfg.antiEnumeration();
+                Long grantExp = plugin.getGrants().expiryOf(
+                        target.getUniqueId(), token, System.currentTimeMillis());
+                boolean granted = grantExp != null;
                 boolean visible;
                 boolean runnable;
                 String reason;
@@ -128,10 +132,24 @@ public final class GuardCommand implements TabExecutor {
                     runReason = "no-match";
                     blockedMsg = "(none)";
                 } else {
-                    visible = CommandMatcher.matches(profile.visibleRules(), token);
-                    runnable = CommandMatcher.matches(profile.rules(), token);
-                    reason = CommandMatcher.explain(profile.visibleRules(), token);
-                    runReason = CommandMatcher.explain(profile.rules(), token);
+                    Decision.Outcome visibleOutcome = Decision.checkVisibility(new Decision.Board(
+                            cfg == null ? null : cfg.pluginsCommand(),
+                            cfg == null ? null : cfg.helpCommand(),
+                            cfg != null && cfg.permissionSync(),
+                            resolver == null ? null : resolver.requiredPermission(token),
+                            target::hasPermission, profile.visibleRules(), token, granted, anti));
+                    Decision.Outcome runnableOutcome = Decision.check(new Decision.Board(
+                            cfg == null ? null : cfg.pluginsCommand(),
+                            cfg == null ? null : cfg.helpCommand(),
+                            cfg != null && cfg.permissionSync(),
+                            resolver == null ? null : resolver.requiredPermission(token),
+                            target::hasPermission, profile.rules(), token, granted, anti));
+                    visible = isAllowed(visibleOutcome);
+                    runnable = isAllowed(runnableOutcome);
+                    reason = outcomeReason(visibleOutcome,
+                            CommandMatcher.explain(profile.visibleRules(), token));
+                    runReason = outcomeReason(runnableOutcome,
+                            CommandMatcher.explain(profile.rules(), token));
                     String bm = profile.blockedMessage();
                     blockedMsg = (bm == null || bm.isEmpty()) ? "(none)" : bm;
                 }
@@ -154,8 +172,6 @@ public final class GuardCommand implements TabExecutor {
                 sender.sendMessage("Sync:          " + (syncOn ? "on" : "off")
                         + " perm=" + (required == null ? "(none)" : required)
                         + " verdict=" + verdict);
-                Long grantExp = plugin.getGrants().expiryOf(
-                        target.getUniqueId(), token, System.currentTimeMillis());
                 sender.sendMessage("Granted:       " + (grantExp != null
                         ? "yes (expires in " + Math.max(0, (grantExp - System.currentTimeMillis()) / 1000) + "s)"
                         : "no"));
@@ -412,6 +428,8 @@ public final class GuardCommand implements TabExecutor {
         int visibleOf = 0;
         int runnableOf = 0;
         int total = 0;
+        int visibleNamespaced = 0;
+        AntiEnumerationConfig anti = cfg == null ? null : cfg.antiEnumeration();
         if (resolver != null && !bypass && enabled && !plugin.isFilteringSuspended()) {
             try {
                 ResolvedProfile profile = resolver.resolve(target);
@@ -438,19 +456,39 @@ public final class GuardCommand implements TabExecutor {
                         } catch (Exception ex) {
                             required = null;
                         }
-                        Decision.Outcome v = Decision.check(new Decision.Board(
+                        Decision.Outcome v = Decision.checkVisibility(new Decision.Board(
                                 pluginsRule, helpRule, syncOn, required,
-                                target::hasPermission, profile.visibleRules(), label, granted));
+                                target::hasPermission, profile.visibleRules(), label, granted,
+                                cfg == null ? null : cfg.antiEnumeration()));
                         if (v == Decision.Outcome.ALLOW
                                 || v == Decision.Outcome.GRANTED) {
                             visibleOf++;
                         }
                         Decision.Outcome r = Decision.check(new Decision.Board(
                                 pluginsRule, helpRule, syncOn, required,
-                                target::hasPermission, profile.rules(), label, granted));
+                                target::hasPermission, profile.rules(), label, granted,
+                                cfg == null ? null : cfg.antiEnumeration()));
                         if (r == Decision.Outcome.ALLOW
                                 || r == Decision.Outcome.GRANTED) {
                             runnableOf++;
+                        }
+                        for (String alias : scan.get(label).aliases()) {
+                            if (AntiEnumerationConfig.namespaceOf(alias).isEmpty()) {
+                                continue;
+                            }
+                            String aliasRequired;
+                            try {
+                                aliasRequired = resolver.requiredPermission(alias);
+                            } catch (Exception ex) {
+                                aliasRequired = null;
+                            }
+                            Decision.Outcome aliasVisible = Decision.checkVisibility(new Decision.Board(
+                                    pluginsRule, helpRule, syncOn, aliasRequired,
+                                    target::hasPermission, profile.visibleRules(), alias, false,
+                                    anti));
+                            if (isAllowed(aliasVisible)) {
+                                visibleNamespaced++;
+                            }
                         }
                     }
                 }
@@ -479,9 +517,30 @@ public final class GuardCommand implements TabExecutor {
         for (String line : Diagnose.report(new Diagnose.Input(enabled,
                 plugin.isFilteringSuspended(), bypass, selfOp,
                 world, groups, visibleOf, runnableOf, total, warnings, validation,
-                grants, syncOn))) {
+                grants, syncOn, anti != null && anti.enabled(), visibleNamespaced,
+                plugin.serverSendsNamespacedCommands()))) {
             sender.sendMessage(line);
         }
+    }
+
+    /** Returns true for outcomes that expose or allow a command. */
+    private static boolean isAllowed(Decision.Outcome outcome) {
+        return outcome == Decision.Outcome.ALLOW || outcome == Decision.Outcome.GRANTED;
+    }
+
+    /** Makes namespace protection visible in /cmdguard test output. */
+    private static String outcomeReason(Decision.Outcome outcome, String fallback) {
+        if (outcome == null) {
+            return fallback;
+        }
+        return switch (outcome) {
+            case ALLOW -> fallback;
+            case GRANTED -> "grant";
+            case DENY_PRIVACY -> "privacy";
+            case DENY_NAMESPACE -> "namespace-protection";
+            case DENY_SYNC -> "permission-sync";
+            case DENY_LIST -> "group-list";
+        };
     }
 
     /** Completes fixed option lists. */
