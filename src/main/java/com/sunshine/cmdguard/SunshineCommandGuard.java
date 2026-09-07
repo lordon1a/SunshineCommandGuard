@@ -1,8 +1,10 @@
 package com.sunshine.cmdguard;
 
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import net.kyori.adventure.text.Component;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -17,8 +19,10 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
     private volatile Map<String, Set<String>> pluginIndex;
     private volatile boolean filteringSuspended;
     private volatile boolean updateChecked;
+    private volatile int lastValidationWarnings;
 
     private final GrantStore grants = new GrantStore();
+    private final SetupWizard setupWizard = new SetupWizard(this);
 
     private VisibilityListener visibilityListener;
     private ExecutionListener executionListener;
@@ -74,11 +78,14 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
             index = Map.of();
         }
         Map<String, String> commandPermissions;
+        Map<String, CommandScan.Entry> scan;
         try {
-            commandPermissions = CommandScan.permissionMap(CommandScan.scan(getServer()));
+            scan = CommandScan.scan(getServer());
+            commandPermissions = CommandScan.permissionMap(scan);
         } catch (Exception ex) {
             getLogger().warning("command permission scan failed: " + ex.getMessage());
             commandPermissions = Map.of();
+            scan = Map.of();
         }
         GroupResolver fresh = new GroupResolver(loaded, index, commandPermissions, getLogger());
         this.config = loaded;
@@ -86,6 +93,30 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
         this.resolver = fresh;
         for (String w : loaded.warnings()) {
             getLogger().warning(w);
+        }
+        try {
+            Set<String> labels = new LinkedHashSet<>(scan.keySet());
+            for (CommandScan.Entry e : scan.values()) {
+                for (String a : e.aliases()) {
+                    String n = CommandMatcher.normalize(a);
+                    if (!n.isEmpty()) {
+                        labels.add(n);
+                    }
+                }
+            }
+            Set<String> worlds = new LinkedHashSet<>();
+            for (World world : getServer().getWorlds()) {
+                worlds.add(world.getName());
+            }
+            int validation = 0;
+            for (String v : ConfigValidator.validate(
+                    loaded.groups(), labels, index.keySet(), worlds)) {
+                getLogger().warning(v);
+                validation++;
+            }
+            lastValidationWarnings = validation;
+        } catch (Exception ex) {
+            getLogger().fine("config validation failed: " + ex.getMessage());
         }
         if (!filteringSuspended) {
             visibilityListener.setResolver(fresh);
@@ -114,7 +145,8 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
             }
         }
         getLogger().info("SunshineCommandGuard reloaded; groups=" + loaded.groups().size()
-                + " warnings=" + loaded.warnings().size());
+                + " warnings=" + loaded.warnings().size()
+                + " validation=" + lastValidationWarnings);
         if (!updateChecked) {
             updateChecked = true;
             try {
@@ -142,6 +174,16 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
     /** Returns the temporary-grant store. */
     public GrantStore getGrants() {
         return grants;
+    }
+
+    /** Returns the interactive setup wizard. */
+    public SetupWizard getSetupWizard() {
+        return setupWizard;
+    }
+
+    /** Validation warnings from the last reload (typos, unknown plugins/worlds). */
+    public int getLastValidationWarnings() {
+        return lastValidationWarnings;
     }
 
     /** Returns the resolver even when suspended; for admin diagnostics. */

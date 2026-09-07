@@ -29,7 +29,7 @@ public final class GuardCommand implements TabExecutor {
             return true;
         }
         if (args.length == 0) {
-            sender.sendMessage("Usage: /cmdguard <reload|refresh|test|debug|dump|generate|grant|ungrant>");
+            sender.sendMessage("Usage: /cmdguard <reload|refresh|test|debug|dump|generate|grant|ungrant|setup|diagnose>");
             return true;
         }
         String sub = args[0].toLowerCase(java.util.Locale.ROOT);
@@ -39,7 +39,8 @@ public final class GuardCommand implements TabExecutor {
                 GuardConfig cfg = plugin.getGuardConfig();
                 int groups = cfg == null ? 0 : cfg.groups().size();
                 int warnings = cfg == null ? 0 : cfg.warnings().size();
-                sender.sendMessage("Reloaded; groups=" + groups + " warnings=" + warnings);
+                sender.sendMessage("Reloaded; groups=" + groups + " warnings=" + warnings
+                        + " validation=" + plugin.getLastValidationWarnings());
                 return true;
             }
             case "refresh": {
@@ -274,8 +275,28 @@ public final class GuardCommand implements TabExecutor {
                         : "No matching grant for " + target.getName() + ".");
                 return true;
             }
+            case "setup": {
+                return plugin.getSetupWizard().handle(sender, args);
+            }
+            case "diagnose": {
+                Player target;
+                if (args.length >= 2) {
+                    target = findPlayer(args[1]);
+                    if (target == null) {
+                        sender.sendMessage("Player offline: " + args[1]);
+                        return true;
+                    }
+                } else if (sender instanceof Player self) {
+                    target = self;
+                } else {
+                    sender.sendMessage("Usage: /cmdguard diagnose <player>");
+                    return true;
+                }
+                runDiagnose(sender, target);
+                return true;
+            }
             default: {
-                sender.sendMessage("Usage: /cmdguard <reload|refresh|test|debug|dump|generate|grant|ungrant>");
+                sender.sendMessage("Usage: /cmdguard <reload|refresh|test|debug|dump|generate|grant|ungrant|setup|diagnose>");
                 return true;
             }
         }
@@ -318,7 +339,7 @@ public final class GuardCommand implements TabExecutor {
         if (args.length == 1) {
             String prefix = args[0].toLowerCase(java.util.Locale.ROOT);
             List<String> subs = Arrays.asList("reload", "refresh", "test", "debug", "dump",
-                    "generate", "grant", "ungrant");
+                    "generate", "grant", "ungrant", "setup", "diagnose");
             List<String> out = new ArrayList<>();
             for (String s : subs) {
                 if (s.startsWith(prefix)) {
@@ -330,8 +351,23 @@ public final class GuardCommand implements TabExecutor {
         if (args.length == 2 && (args[0].equalsIgnoreCase("refresh")
                 || args[0].equalsIgnoreCase("test")
                 || args[0].equalsIgnoreCase("grant")
+                || args[0].equalsIgnoreCase("diagnose")
                 || args[0].equalsIgnoreCase("ungrant"))) {
             return completePlayer(args[1]);
+        }
+        if (args.length == 3 && args[0].equalsIgnoreCase("setup")
+                && args[1].equalsIgnoreCase("pick")) {
+            return completePrefix(args[2], Arrays.asList("base", "privacy", "sync"));
+        }
+        if (args.length == 4 && args[0].equalsIgnoreCase("setup")
+                && args[1].equalsIgnoreCase("pick")) {
+            if (args[2].equalsIgnoreCase("base")) {
+                return completePrefix(args[3], Arrays.asList("minimal", "essentials", "custom"));
+            }
+            if (args[2].equalsIgnoreCase("privacy") || args[2].equalsIgnoreCase("sync")) {
+                return completePrefix(args[3], Arrays.asList("yes", "no"));
+            }
+            return List.of();
         }
         if (args.length == 4 && args[0].equalsIgnoreCase("grant")) {
             String prefix = args[3].toLowerCase(java.util.Locale.ROOT);
@@ -344,6 +380,90 @@ public final class GuardCommand implements TabExecutor {
             return out;
         }
         return List.of();
+    }
+
+    /** Runs the common-mistake check for one player and prints the report. */
+    private void runDiagnose(CommandSender sender, Player target) {
+        GuardConfig cfg = plugin.getGuardConfig();
+        GroupResolver resolver = plugin.getRawResolver();
+        boolean enabled = cfg != null && cfg.enabled();
+        boolean bypass = false;
+        try {
+            String bp = cfg == null ? "sunshine.cmdguard.bypass" : cfg.bypassPermission();
+            bypass = target.isOp() || target.hasPermission(bp);
+        } catch (Exception ex) {
+            bypass = false;
+        }
+        List<String> groups = new ArrayList<>();
+        if (resolver != null) {
+            try {
+                groups = resolver.matchedGroups(target);
+            } catch (Exception ex) {
+                groups = new ArrayList<>();
+            }
+        }
+        String world = null;
+        try {
+            world = target.getWorld().getName();
+        } catch (Exception ex) {
+            world = null;
+        }
+        int visibleOf = 0;
+        int runnableOf = 0;
+        int total = 0;
+        if (resolver != null && !bypass && enabled) {
+            try {
+                ResolvedProfile profile = resolver.resolve(target);
+                if (profile != null) {
+                    Map<String, CommandScan.Entry> scan =
+                            CommandScan.scan(plugin.getServer());
+                    total = scan.size();
+                    for (String label : scan.keySet()) {
+                        if (CommandMatcher.matches(profile.visibleRules(), label)) {
+                            visibleOf++;
+                        }
+                        if (CommandMatcher.matches(profile.rules(), label)) {
+                            runnableOf++;
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                plugin.getLogger().fine("diagnose scan failed: " + ex.getMessage());
+            }
+        }
+        int warnings = cfg == null ? 0 : cfg.warnings().size();
+        int grants = 0;
+        try {
+            grants = plugin.getGrants()
+                    .grantedCommands(target.getUniqueId(), System.currentTimeMillis()).size();
+        } catch (Exception ex) {
+            grants = 0;
+        }
+        boolean syncOn = cfg != null && cfg.permissionSync();
+        boolean selfOp = false;
+        try {
+            selfOp = sender instanceof Player self
+                    && self.getUniqueId().equals(target.getUniqueId()) && target.isOp();
+        } catch (Exception ex) {
+            selfOp = false;
+        }
+        sender.sendMessage("Diagnose: " + target.getName());
+        for (String line : Diagnose.report(new Diagnose.Input(enabled, bypass, selfOp,
+                world, groups, visibleOf, runnableOf, total, warnings, grants, syncOn))) {
+            sender.sendMessage(line);
+        }
+    }
+
+    /** Completes fixed option lists. */
+    private List<String> completePrefix(String prefixArg, List<String> options) {
+        String prefix = prefixArg.toLowerCase(java.util.Locale.ROOT);
+        List<String> out = new ArrayList<>();
+        for (String s : options) {
+            if (s.startsWith(prefix)) {
+                out.add(s);
+            }
+        }
+        return out;
     }
 
     /** Completes an online player name. */

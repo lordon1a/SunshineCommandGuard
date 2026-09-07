@@ -50,6 +50,14 @@ closes both doors without touching a single permission node you already have in 
 - **One-command setup** — `/cmdguard generate` scans your live server and writes a reviewed
   starter config (`config.generated.yml`): commands nobody needs a permission for go to
   `default`, permission-gated ones to `staff`. Copy what you want into `config.yml`.
+- **Interactive setup wizard** — `/cmdguard setup` walks you through three clickable questions
+  in chat (starter list, privacy, permission-sync) and writes `config.yml` for you.
+- **Precise config validation** — every `/cmdguard reload` cross-checks your lists against the
+  live server and points at exact entries: typos, unknown plugins, bad regex, unknown groups
+  and unloaded worlds (`groups.default.commands[1]: 'spwan' matches no registered command`).
+- **Self-diagnosis** — `/cmdguard diagnose [player]` catches the classic mistakes: filter off,
+  testing with an OP account, zero visible commands, config warnings — with live counts
+  ("Visible: 12 of 340 commands").
 - **Permission-sync mode** — optionally also require each command's own Bukkit permission node,
   so players automatically lose commands their rank can't run, with zero list maintenance.
 - **Temporary grants** — `/cmdguard grant <player> <command> <10m|2h|1d>` opens one command for
@@ -82,11 +90,12 @@ privacy messages are that server's own text, fully customizable in `config.yml`.
 
 ## Installation
 
-1. Drop `SunshineCommandGuard-1.1.0.jar` into your `plugins/` folder and start the server once
+1. Drop `SunshineCommandGuard-1.2.0.jar` into your `plugins/` folder and start the server once
    (this creates the default `config.yml`).
-2. Run `/cmdguard generate` and copy the useful parts of `config.generated.yml` into
-   `config.yml` — or write your groups by hand.
-3. Verify **before** enabling: `/cmdguard test <player> <command>`, with a non-OP test account.
+2. Run `/cmdguard setup` in-game and answer three questions — or run `/cmdguard generate`
+   and copy the useful parts of `config.generated.yml` into `config.yml`.
+3. Verify **before** enabling: `/cmdguard test <player> <command>` (or `/cmdguard diagnose`),
+   with a non-OP test account.
 4. Set `enabled: true`, then `/cmdguard reload`.
 
 ## ⚠️ Warning
@@ -158,6 +167,78 @@ privacy:
     aliases: ["?", "bukkit:help", "minecraft:help"]
 ```
 
+## Copy-paste recipes
+
+EssentialsX survival server — the usual player commands, nothing else:
+
+```yaml
+enabled: true
+groups:
+  default:
+    priority: 0
+    blocked-message: "<red>Unknown command."
+    commands:
+      - help
+      - spawn
+      - home
+      - sethome
+      - delhome
+      - tpa
+      - tpaccept
+      - tpdeny
+      - msg
+      - mail
+      - pay
+      - balance
+      - kit
+      - warp
+      - afk
+      - rules
+      - "regex:^(msg|tell|w|r|reply)$"
+      - "!op"
+      - "!stop"
+    hidden: []
+    args: {}
+    worlds: []
+```
+
+Minigame lobby + survival worlds — lobby commands only exist in their worlds:
+
+```yaml
+enabled: true
+groups:
+  default:
+    priority: 0
+    blocked-message: "<red>Unknown command."
+    commands: [help, spawn, msg]
+    hidden: []
+    args: {}
+    worlds: []
+  minigames:
+    priority: 20
+    inherit: [default]
+    commands: [queue, leave, spectate, party]
+    hidden: []
+    args: {}
+    worlds: [arena, lobby]
+```
+
+Strict mode — tiny lists plus permission-sync, so a command also needs its own
+Bukkit permission node and new plugins stay hidden until you allow them:
+
+```yaml
+enabled: true
+permission-sync: true
+groups:
+  default:
+    priority: 0
+    blocked-message: "<red>Unknown command."
+    commands: [help, rules]
+    hidden: []
+    args: {}
+    worlds: []
+```
+
 **Matching rules:** entries are matched case-insensitively, with or without a leading `/`, and
 namespaced labels (`essentials:heal`) also match their base name (`heal`). `!entry` denies (deny
 always wins over any allow), `regex:<pattern>` allows full-match patterns, `plugin:<Name>`
@@ -208,6 +289,8 @@ groups:
 | `/cmdguard generate` | `sunshine.cmdguard.admin` | Write a review-ready starter config to `config.generated.yml` |
 | `/cmdguard grant <player> <command> <30s\|10m\|2h\|1d>` | `sunshine.cmdguard.admin` | Temporarily allow one command (memory-only, lost on restart) |
 | `/cmdguard ungrant <player> [command]` | `sunshine.cmdguard.admin` | Revoke one or all temporary grants |
+| `/cmdguard setup` | `sunshine.cmdguard.admin` | Interactive chat setup (players only): starter list, privacy, sync |
+| `/cmdguard diagnose [player]` | `sunshine.cmdguard.admin` | Common-mistake check with live visible/runnable counts |
 
 | Permission | Default | Description |
 | --- | --- | --- |
@@ -241,16 +324,16 @@ player resolves to the `default` group.
 
 ## Compatibility
 
-Built against the **Paper 1.21.4 API (Java 21)**. Tested on a clean Paper 26.2 server (v1.1.0:
-clean enable, `groups=3 warnings=0`) and running in production on Paper 26.2. The same jar
+Built against the **Paper 1.21.4 API (Java 21)**. Tested on a clean Paper 26.2 server (v1.2.0:
+clean enable, validator flags unregistered template entries). The same jar
 runs on **Folia**. Older/newer server versions are untested — please open an issue with what
 works or doesn't on your setup.
 
 ## Building from source
 
 ```powershell
-.\gradlew.bat build   # needs JDK 21, output: build/libs/SunshineCommandGuard-1.1.0.jar
-.\gradlew.bat test    # 65 unit tests (JUnit 5)
+.\gradlew.bat build   # needs JDK 21, output: build/libs/SunshineCommandGuard-1.2.0.jar
+.\gradlew.bat test    # 88 unit tests (JUnit 5)
 ```
 
 The uploaded jar must be the `shadowJar` output (`build/libs/...`), which bundles bStats
