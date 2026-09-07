@@ -55,12 +55,20 @@ public final class SetupPlan {
         return base;
     }
 
-    /** Applies the plan: default group (unless custom), privacy, permission-sync. */
-    public void applyTo(YamlConfiguration cfg) {
+    /** Applies the plan: default group (unless custom), privacy, permission-sync.
+     * Clears default inherit so a stale parent can't leak commands in.
+     * Turns a live filter OFF for safe verification.
+     * @return true when the filter was on and got turned off. */
+    public boolean applyTo(YamlConfiguration cfg) {
+        boolean wasOn = cfg.getBoolean("enabled", false);
+        if (wasOn) {
+            cfg.set("enabled", false);
+        }
         if (!"custom".equals(base)) {
             List<String> commands = "essentials".equals(base)
                     ? ESSENTIALS_COMMANDS : MINIMAL_COMMANDS;
             cfg.set("groups.default.priority", 0);
+            cfg.set("groups.default.inherit", List.of());
             cfg.set("groups.default.blocked-message", "<red>Unknown command.");
             cfg.set("groups.default.commands", commands);
             cfg.set("groups.default.hidden", List.of());
@@ -76,5 +84,6 @@ public final class SetupPlan {
                 "<yellow>Type <white>/help <yellow>for a list of commands.");
         cfg.set("privacy.help-command.aliases", HELP_ALIASES);
         cfg.set("permission-sync", sync);
+        return wasOn;
     }
 }

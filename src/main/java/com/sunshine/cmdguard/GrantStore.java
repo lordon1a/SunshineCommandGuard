@@ -1,8 +1,6 @@
 package com.sunshine.cmdguard;
 
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -71,16 +69,17 @@ public final class GrantStore {
         if (per == null) {
             return out;
         }
-        List<String> dead = new ArrayList<>();
         for (var e : per.entrySet()) {
-            if (e.getValue() <= now) {
-                dead.add(e.getKey());
+            Long observed = e.getValue();
+            if (observed == null) {
+                continue;
+            }
+            if (observed <= now) {
+                // CAS remove: a concurrent fresh grant for the same key must survive.
+                per.remove(e.getKey(), observed);
             } else {
                 out.add(e.getKey());
             }
-        }
-        for (String k : dead) {
-            per.remove(k);
         }
         if (per.isEmpty()) {
             grants.remove(player, per);

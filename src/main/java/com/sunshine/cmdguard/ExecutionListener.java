@@ -53,7 +53,6 @@ public final class ExecutionListener implements Listener {
             return;
         }
         String token = CommandMatcher.normalize(event.getMessage());
-        String base = CommandMatcher.stripNamespace(token);
         if (token.isEmpty()) {
             return;
         }
@@ -69,72 +68,54 @@ public final class ExecutionListener implements Listener {
             return;
         }
         GrantStore grantStore = grants;
+        boolean granted = false;
         if (grantStore != null) {
             try {
-                if (grantStore.isGranted(player.getUniqueId(), token, System.currentTimeMillis())) {
-                    return;
-                }
+                granted = grantStore.isGranted(player.getUniqueId(), token,
+                        System.currentTimeMillis());
             } catch (Exception ex) {
                 logger.fine("grant check failed: " + ex.getMessage());
             }
         }
         PrivacyRule pluginsRule = currentConfig.pluginsCommand();
-        if (pluginsRule != null && pluginsRule.enabled()
-                && (pluginsRule.aliases().contains(token) || pluginsRule.aliases().contains(base))) {
-            event.setCancelled(true);
-            sendPrivacyMessage(player, pluginsRule.message(), profile.blockedMessage(), token);
-            reportBlocked(player, token, "privacy");
-            return;
-        }
         PrivacyRule helpRule = currentConfig.helpCommand();
-        if (helpRule != null && helpRule.enabled()
-                && (helpRule.aliases().contains(token) || helpRule.aliases().contains(base))) {
-            event.setCancelled(true);
-            sendPrivacyMessage(player, helpRule.message(), profile.blockedMessage(), token);
-            reportBlocked(player, token, "privacy");
-            return;
-        }
-        GroupResolver.SyncVerdict sync;
+        String required;
         try {
-            sync = GroupResolver.evaluateSync(currentConfig.permissionSync(),
-                    currentResolver.requiredPermission(token), player::hasPermission);
+            required = currentResolver.requiredPermission(token);
         } catch (Exception ex) {
-            sync = GroupResolver.SyncVerdict.ABSTAIN;
+            required = null;
         }
-        if (sync == GroupResolver.SyncVerdict.DENY) {
-            event.setCancelled(true);
-            String blocked = profile.blockedMessage();
-            if (blocked != null && !blocked.isEmpty()) {
-                try {
-                    player.sendMessage(Messages.render(blocked, player.getName(), token));
-                } catch (Exception ex) {
-                    logger.warning("blocked message failed: " + ex.getMessage());
+        Decision.Outcome verdict = Decision.check(new Decision.Board(
+                pluginsRule, helpRule, currentConfig.permissionSync(), required,
+                player::hasPermission, profile.rules(), token, granted));
+        switch (verdict) {
+            case ALLOW, GRANTED -> {
+                return;
+            }
+            case DENY_PRIVACY -> {
+                event.setCancelled(true);
+                PrivacyRule hit = Decision.privacyBlocks(pluginsRule, token)
+                        ? pluginsRule : helpRule;
+                String privacyMessage = hit == null ? "" : hit.message();
+                sendPrivacyMessage(player, privacyMessage, profile.blockedMessage(), token);
+                reportBlocked(player, token, "privacy");
+                return;
+            }
+            case DENY_SYNC, DENY_LIST -> {
+                event.setCancelled(true);
+                String blocked = profile.blockedMessage();
+                if (blocked != null && !blocked.isEmpty()) {
+                    try {
+                        player.sendMessage(Messages.render(blocked, player.getName(), token));
+                    } catch (Exception ex) {
+                        logger.warning("blocked message failed: " + ex.getMessage());
+                    }
                 }
-            }
-            reportBlocked(player, token, "permission-sync");
-            return;
-        }
-        boolean allowed;
-        try {
-            allowed = CommandMatcher.matches(profile.rules(), token);
-        } catch (Exception ex) {
-            logger.warning("execution match failed: " + ex.getMessage());
-            return;
-        }
-        if (allowed) {
-            return;
-        }
-        event.setCancelled(true);
-        String blocked = profile.blockedMessage();
-        if (blocked != null && !blocked.isEmpty()) {
-            try {
-                player.sendMessage(Messages.render(blocked, player.getName(), token));
-            } catch (Exception ex) {
-                logger.warning("blocked message failed: " + ex.getMessage());
+                reportBlocked(player, token,
+                        verdict == Decision.Outcome.DENY_SYNC ? "permission-sync" : "group-list");
+                return;
             }
         }
-        reportBlocked(player, token, "group-list");
-        logger.fine("blocked command " + token + " for " + player.getName());
     }
 
     /** Logs and optionally notifies staff about a blocked attempt. */

@@ -87,6 +87,21 @@ final class ConfigValidatorTest {
     }
 
     @Test
+    void argsValuesChecked() {
+        Map<String, GroupDef> groups = new LinkedHashMap<>();
+        Map<String, ArgRule> args = new LinkedHashMap<>();
+        args.put("help", new ArgRule(
+                List.of("survival", "regex:[unclosed", "plugin:Nope"),
+                List.of("regex:^ok.*")));
+        groups.put("default", new GroupDef("default", 0, List.of(), "",
+                List.of("help"), List.of(), args));
+        List<String> w = validate(groups);
+        assertEquals(2, w.size());
+        assertEquals("groups.default.args.help.allow[1]: invalid regex 'regex:[unclosed'", w.get(0));
+        assertEquals("groups.default.args.help.allow[2]: unknown plugin 'nope'", w.get(1));
+    }
+
+    @Test
     void nullSafe() {
         assertTrue(ConfigValidator.validate(null, COMMANDS, PLUGINS, WORLDS).isEmpty());
         Map<String, GroupDef> groups = new LinkedHashMap<>();

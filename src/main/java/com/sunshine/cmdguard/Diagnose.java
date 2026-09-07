@@ -11,6 +11,7 @@ public final class Diagnose {
 
     /** Everything the report needs, as plain values. */
     public record Input(boolean enabled,
+                        boolean suspended,
                         boolean bypass,
                         boolean selfOp,
                         String worldName,
@@ -19,6 +20,7 @@ public final class Diagnose {
                         int runnableOf,
                         int totalCommands,
                         int warnings,
+                        int validation,
                         int grants,
                         boolean syncOn) {}
 
@@ -27,9 +29,14 @@ public final class Diagnose {
     /** Builds diagnosis lines for one player. */
     public static List<String> report(Input in) {
         List<String> out = new ArrayList<>();
-        out.add("Filter: " + (in.enabled() ? "ON" : "OFF"));
+        out.add("Filter: " + (in.enabled() ? "ON" : "OFF")
+                + (in.suspended() ? " (SUSPENDED via debug)" : ""));
         if (!in.enabled()) {
             out.add("enabled:false — nothing is filtered. Set enabled:true + reload to activate.");
+        }
+        if (in.suspended()) {
+            out.add("Suspended: no filtering applies to anyone. Run /cmdguard debug to resume.");
+            return out;
         }
         if (in.bypass()) {
             if (in.selfOp()) {
@@ -59,6 +66,10 @@ public final class Diagnose {
         }
         if (in.warnings() > 0) {
             out.add("Config has " + in.warnings() + " warning(s) — see console after reload.");
+        }
+        if (in.validation() > 0) {
+            out.add("Validation has " + in.validation()
+                    + " warning(s) — typos/unknown entries, see console.");
         }
         if (in.grants() > 0) {
             out.add(in.grants() + " temporary grant(s) active.");

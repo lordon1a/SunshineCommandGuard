@@ -1,6 +1,11 @@
 package com.sunshine.cmdguard;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -11,29 +16,15 @@ import org.bukkit.entity.Player;
 
 /**
  * Click-through first-time setup. Players only (console has no click support).
- * Pure choice logic lives in {@link SetupPlan}; this class owns sessions,
- * chat rendering and the config.yml write.
+ * Choice logic lives in {@link WizardFlow} (tested); this class owns sessions,
+ * chat rendering and the config.yml write (backup + validate + atomic replace).
  */
 public final class SetupWizard {
 
     private static final long SESSION_MILLIS = 5 * 60 * 1000L;
 
-    private record Session(String base, Boolean privacy, Boolean sync, long startedAt) {
-        Session withBase(String b) {
-            return new Session(b, privacy, sync, startedAt);
-        }
-
-        Session withPrivacy(boolean p) {
-            return new Session(base, p, sync, startedAt);
-        }
-
-        Session withSync(boolean s) {
-            return new Session(base, privacy, s, startedAt);
-        }
-    }
-
     private final SunshineCommandGuard plugin;
-    private final Map<String, Session> sessions = new ConcurrentHashMap<>();
+    private final Map<String, WizardFlow.Session> sessions = new ConcurrentHashMap<>();
 
     /** Creates the wizard with its owning plugin. */
     public SetupWizard(SunshineCommandGuard plugin) {
@@ -51,85 +42,141 @@ public final class SetupWizard {
         }
         String key = player.getUniqueId().toString();
         if (args.length == 1) {
-            sessions.put(key, new Session(null, null, null, System.currentTimeMillis()));
+            sessions.put(key, WizardFlow.fresh(System.currentTimeMillis()));
             send(player, questionBase());
             return true;
         }
         if (args.length == 4 && args[1].equalsIgnoreCase("pick")) {
-            handlePick(player, key, args[2].toLowerCase(Locale.ROOT),
+            WizardFlow.Session current = sessions.get(key);
+            WizardFlow.Transition t = WizardFlow.advance(current, System.currentTimeMillis(),
+                    SESSION_MILLIS, args[2].toLowerCase(Locale.ROOT),
                     args[3].toLowerCase(Locale.ROOT));
+            switch (t.signal()) {
+                case RESTART -> {
+                    sessions.put(key, t.session());
+                    send(player, "<yellow>Setup session expired — starting over.");
+                    send(player, questionBase());
+                }
+                case SHOW_BASE -> {
+                    sessions.put(key, t.session());
+                    send(player, questionBase());
+                }
+                case SHOW_PRIVACY -> {
+                    sessions.put(key, t.session());
+                    send(player, questionPrivacy());
+                }
+                case SHOW_SYNC -> {
+                    sessions.put(key, t.session());
+                    send(player, questionSync());
+                }
+                case FINISH -> {
+                    sessions.remove(key);
+                    finish(player, t.session());
+                }
+            }
             return true;
         }
         send(player, "<red>Usage: /cmdguard setup — click the options in chat.");
         return true;
     }
 
-    private void handlePick(Player player, String key, String step, String value) {
-        Session s = sessions.get(key);
-        if (s == null || System.currentTimeMillis() - s.startedAt() > SESSION_MILLIS) {
-            sessions.put(key, new Session(null, null, null, System.currentTimeMillis()));
-            send(player, "<yellow>Setup session expired — starting over.");
-            send(player, questionBase());
-            return;
-        }
-        switch (step) {
-            case "base" -> {
-                if (s.base() != null || SetupPlan.from(value, false, false) == null) {
-                    send(player, questionBase());
-                    return;
-                }
-                sessions.put(key, s.withBase(value));
-                send(player, questionPrivacy());
-            }
-            case "privacy" -> {
-                if (s.base() == null || s.privacy() != null || !(value.equals("yes") || value.equals("no"))) {
-                    send(player, questionPrivacy());
-                    return;
-                }
-                sessions.put(key, s.withPrivacy(value.equals("yes")));
-                send(player, questionSync());
-            }
-            case "sync" -> {
-                if (s.base() == null || s.privacy() == null || !(value.equals("yes") || value.equals("no"))) {
-                    send(player, questionSync());
-                    return;
-                }
-                sessions.remove(key);
-                finish(player, s.base(), s.privacy(), value.equals("yes"));
-            }
-            default -> send(player, questionBase());
-        }
-    }
-
-    private void finish(Player player, String base, boolean privacy, boolean sync) {
-        SetupPlan plan = SetupPlan.from(base, privacy, sync);
+    private void finish(Player player, WizardFlow.Session session) {
+        SetupPlan plan = SetupPlan.from(session.base(),
+                Boolean.TRUE.equals(session.privacy()), Boolean.TRUE.equals(session.sync()));
         if (plan == null) {
             send(player, "<red>Setup failed: invalid choice. Start over with /cmdguard setup.");
             return;
         }
-        try {
-            File dir = plugin.getDataFolder();
-            if (!dir.exists() && !dir.mkdirs()) {
-                plugin.getLogger().warning("setup directory not writable");
-                send(player, "<red>Setup failed; see server log.");
-                return;
-            }
-            File file = new File(dir, "config.yml");
-            YamlConfiguration disk = YamlConfiguration.loadConfiguration(file);
-            plan.applyTo(disk);
-            disk.save(file);
-        } catch (Exception ex) {
-            plugin.getLogger().warning("setup save failed: " + ex.getMessage());
+        File dir = plugin.getDataFolder();
+        if (!dir.exists() && !dir.mkdirs()) {
+            plugin.getLogger().warning("setup directory not writable");
             send(player, "<red>Setup failed; see server log.");
             return;
         }
+        File file = new File(dir, "config.yml");
+        YamlConfiguration disk = loadValidated(file);
+        if (disk == null) {
+            send(player, "<red>Your config.yml has a YAML syntax error — fix it first"
+                    + " (see console), then re-run setup. Nothing was changed.");
+            return;
+        }
+        backup(file);
+        boolean wasOn;
+        try {
+            wasOn = plan.applyTo(disk);
+            saveAtomically(disk, file);
+        } catch (Exception ex) {
+            plugin.getLogger().warning("setup save failed: " + ex.getMessage());
+            send(player, "<red>Setup failed; see server log. Your backup is next to config.yml.");
+            return;
+        }
         plugin.reload();
-        send(player, "<green>Applied: base=" + base + ", privacy=" + onOff(privacy)
-                + ", permission-sync=" + onOff(sync) + ". Config reloaded.");
+        send(player, "<green>Applied: base=" + session.base()
+                + ", privacy=" + onOff(Boolean.TRUE.equals(session.privacy()))
+                + ", permission-sync=" + onOff(Boolean.TRUE.equals(session.sync()))
+                + ". Config reloaded.");
+        if (wasOn) {
+            send(player, "<yellow>The filter was ON — it is now OFF for safe verification.");
+        }
         send(player, "<gray>Only the default group, privacy and sync were touched."
                 + " (Note: saving reset the file's comments.)");
         send(player, "<yellow>Verify with <click:suggest_command:'/cmdguard test '>"
                 + "/cmdguard test <player> <command></click> before enabling the filter.");
+    }
+
+    /**
+     * Reads and validates the current config. Returns null when the file exists
+     * but is not valid YAML (loadConfiguration would silently return empty).
+     */
+    private YamlConfiguration loadValidated(File file) {
+        try {
+            if (!file.exists()) {
+                return new YamlConfiguration();
+            }
+            String text = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+            YamlConfiguration cfg = new YamlConfiguration();
+            cfg.loadFromString(text);
+            return cfg;
+        } catch (Exception ex) {
+            plugin.getLogger().warning("setup refused: config.yml is invalid: " + ex.getMessage());
+            return null;
+        }
+    }
+
+    /** Copies config.yml to a timestamped .bak next to it. Best effort. */
+    private void backup(File file) {
+        try {
+            if (!file.exists()) {
+                return;
+            }
+            String stamp = new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date());
+            Files.copy(file.toPath(),
+                    new File(file.getParentFile(), "config.yml." + stamp + ".bak").toPath());
+        } catch (Exception ex) {
+            plugin.getLogger().warning("setup backup failed: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Saves via temp file + atomic move so a crash can't leave half a config.
+     * Falls back to a direct save when atomic move is unsupported.
+     */
+    private void saveAtomically(YamlConfiguration disk, File file) throws Exception {
+        File tmp = File.createTempFile("config", ".yml", file.getParentFile());
+        try {
+            disk.save(tmp);
+            try {
+                Files.move(tmp.toPath(), file.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException ex) {
+                Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            try {
+                Files.deleteIfExists(tmp.toPath());
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     private static String onOff(boolean b) {
@@ -155,7 +202,9 @@ public final class SetupWizard {
     }
 
     private static String questionPrivacy() {
-        return "<gold>CmdGuard setup (2/3): hide /plugins, /ver and /help behind custom messages?\n"
+        return "<gold>CmdGuard setup (2/3): hide /plugins, /ver and help aliases"
+                + " (?, bukkit:help) behind custom messages?\n"
+                + "<gray>Plain /help stays visible as the fallback pointer.\n"
                 + "<click:run_command:'/cmdguard setup pick privacy yes'>"
                 + "<green>[Yes]</green></click>  "
                 + "<click:run_command:'/cmdguard setup pick privacy no'>"

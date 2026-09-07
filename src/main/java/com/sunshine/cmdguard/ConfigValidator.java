@@ -43,7 +43,7 @@ public final class ConfigValidator {
             }
             checkEntries(out, group, "commands", def.commands(), knownCommands, knownPlugins);
             checkEntries(out, group, "hidden", def.hidden(), knownCommands, knownPlugins);
-            checkArgs(out, group, def.args(), knownCommands);
+            checkArgs(out, group, def.args(), knownCommands, knownPlugins);
             checkInherit(out, group, def.inherit(), groups);
             checkWorlds(out, group, def.worlds(), loadedWorlds);
         }
@@ -95,11 +95,13 @@ public final class ConfigValidator {
     }
 
     private static void checkArgs(List<String> out, String group,
-                                  Map<String, ArgRule> args, Set<String> knownCommands) {
+                                  Map<String, ArgRule> args, Set<String> knownCommands,
+                                  Set<String> knownPlugins) {
         if (args == null) {
             return;
         }
-        for (String cmd : args.keySet()) {
+        for (Map.Entry<String, ArgRule> e : args.entrySet()) {
+            String cmd = e.getKey();
             if (cmd == null || cmd.isEmpty()) {
                 continue;
             }
@@ -107,6 +109,47 @@ public final class ConfigValidator {
                     && !knownCommands.contains(CommandMatcher.stripNamespace(cmd))) {
                 out.add("groups." + group + ".args: '" + cmd + "' matches no registered command"
                         + " (typo? or its plugin is not loaded yet?)");
+            }
+            ArgRule rule = e.getValue();
+            if (rule == null) {
+                continue;
+            }
+            // Argument values are free-form, but regex:/plugin: entries are still verifiable.
+            checkArgValues(out, "groups." + group + ".args." + cmd + ".allow",
+                    rule.allow(), knownPlugins);
+            checkArgValues(out, "groups." + group + ".args." + cmd + ".deny",
+                    rule.deny(), knownPlugins);
+        }
+    }
+
+    private static void checkArgValues(List<String> out, String path,
+                                       List<String> values, Set<String> knownPlugins) {
+        if (values == null) {
+            return;
+        }
+        for (int i = 0; i < values.size(); i++) {
+            String raw = values.get(i);
+            if (raw == null || raw.trim().isEmpty()) {
+                continue;
+            }
+            String work = raw.trim();
+            if (work.startsWith("!")) {
+                work = work.substring(1).trim();
+            }
+            String lower = work.toLowerCase(Locale.ROOT);
+            if (lower.startsWith("regex:")) {
+                try {
+                    Pattern.compile(work.substring(6), Pattern.CASE_INSENSITIVE);
+                } catch (PatternSyntaxException ex) {
+                    out.add(path + "[" + i + "]: invalid regex '" + raw + "'");
+                }
+                continue;
+            }
+            if (lower.startsWith("plugin:")) {
+                String name = work.substring(7).trim().toLowerCase(Locale.ROOT);
+                if (!knownPlugins.contains(name)) {
+                    out.add(path + "[" + i + "]: unknown plugin '" + name + "'");
+                }
             }
         }
     }

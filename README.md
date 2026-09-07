@@ -34,8 +34,9 @@ closes both doors without touching a single permission node you already have in 
   The command doesn't just disappear from suggestions; the client never learns it exists.
 - **Execution blocking** — a command the player may not run behaves as an unknown command,
   with a fully customizable message.
-- **Server privacy** — hides `/plugins`, `/pl`, `/ver`, `/version`, `/about` and `/help` behind
-  a message you write.
+- **Server privacy** — hides `/plugins`, `/pl`, `/ver`, `/version`, `/about` and the `?`
+  help aliases behind a message you write (plain `/help` stays: blocked players are sent
+  there).
 - **Per-group profiles** — groups resolved from LuckPerms permissions
   (`sunshine.cmdguard.group.<name>`), with `inherit` and `priority` so a `staff` group can
   extend `vip`, which extends `default`, without repeating a single line.
@@ -153,7 +154,8 @@ groups:
     args: {}
 ```
 
-Server privacy — replace `/plugins`, `/help`, and friends:
+Server privacy — replace `/plugins`, `/ver` and help aliases (plain `/help` stays
+visible on purpose: it is the fallback the blocked message points players to):
 
 ```yaml
 privacy:
@@ -333,7 +335,7 @@ works or doesn't on your setup.
 
 ```powershell
 .\gradlew.bat build   # needs JDK 21, output: build/libs/SunshineCommandGuard-1.2.0.jar
-.\gradlew.bat test    # 88 unit tests (JUnit 5)
+.\gradlew.bat test    # 106 unit tests (JUnit 5)
 ```
 
 The uploaded jar must be the `shadowJar` output (`build/libs/...`), which bundles bStats

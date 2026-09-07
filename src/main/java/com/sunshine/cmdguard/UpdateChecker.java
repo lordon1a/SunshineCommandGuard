@@ -26,7 +26,7 @@ public final class UpdateChecker {
         String id = config.modrinthId().trim();
         CompatScheduler.runAsync(plugin, () -> {
             try {
-                String latest = fetchLatest(id);
+                String latest = fetchLatest(id, plugin.getDescription().getVersion());
                 if (latest == null) {
                     return;
                 }
@@ -41,25 +41,27 @@ public final class UpdateChecker {
     }
 
     /** Fetches version numbers from Modrinth and returns the newest, or null. */
-    static String fetchLatest(String modrinthId) throws Exception {
+    static String fetchLatest(String modrinthId, String currentVersion) throws Exception {
         HttpURLConnection con = (HttpURLConnection) URI.create(API + modrinthId + "/version")
                 .toURL().openConnection();
-        con.setRequestMethod("GET");
-        con.setRequestProperty("User-Agent", "SunshineCommandGuard/1.1.0");
-        con.setConnectTimeout(8000);
-        con.setReadTimeout(8000);
-        int code = con.getResponseCode();
-        if (code < 200 || code >= 300) {
-            return null;
-        }
-        String body;
-        try (BufferedReader in = new BufferedReader(
-                new InputStreamReader(con.getInputStream(), StandardCharsets.UTF_8))) {
-            body = in.lines().collect(Collectors.joining("\n"));
+        try {
+            con.setRequestMethod("GET");
+            con.setRequestProperty("User-Agent", "SunshineCommandGuard/" + currentVersion);
+            con.setConnectTimeout(8000);
+            con.setReadTimeout(8000);
+            int code = con.getResponseCode();
+            if (code < 200 || code >= 300) {
+                return null;
+            }
+            String body;
+            try (BufferedReader in = new BufferedReader(
+                    new InputStreamReader(con.getInputStream(), StandardCharsets.UTF_8))) {
+                body = in.lines().collect(Collectors.joining("\n"));
+            }
+            return pickLatestVersion(body);
         } finally {
             con.disconnect();
         }
-        return pickLatestVersion(body);
     }
 
     /**

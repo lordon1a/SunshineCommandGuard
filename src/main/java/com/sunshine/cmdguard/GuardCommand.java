@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
@@ -411,18 +412,44 @@ public final class GuardCommand implements TabExecutor {
         int visibleOf = 0;
         int runnableOf = 0;
         int total = 0;
-        if (resolver != null && !bypass && enabled) {
+        if (resolver != null && !bypass && enabled && !plugin.isFilteringSuspended()) {
             try {
                 ResolvedProfile profile = resolver.resolve(target);
                 if (profile != null) {
                     Map<String, CommandScan.Entry> scan =
                             CommandScan.scan(plugin.getServer());
                     total = scan.size();
+                    PrivacyRule pluginsRule = cfg == null ? null : cfg.pluginsCommand();
+                    PrivacyRule helpRule = cfg == null ? null : cfg.helpCommand();
+                    boolean syncOn = cfg != null && cfg.permissionSync();
+                    Set<String> grantedSet;
+                    try {
+                        grantedSet = plugin.getGrants().grantedCommands(
+                                target.getUniqueId(), System.currentTimeMillis());
+                    } catch (Exception ex) {
+                        grantedSet = Set.of();
+                    }
                     for (String label : scan.keySet()) {
-                        if (CommandMatcher.matches(profile.visibleRules(), label)) {
+                        boolean granted = grantedSet.contains(
+                                CommandMatcher.normalize(label));
+                        String required;
+                        try {
+                            required = resolver.requiredPermission(label);
+                        } catch (Exception ex) {
+                            required = null;
+                        }
+                        Decision.Outcome v = Decision.check(new Decision.Board(
+                                pluginsRule, helpRule, syncOn, required,
+                                target::hasPermission, profile.visibleRules(), label, granted));
+                        if (v == Decision.Outcome.ALLOW
+                                || v == Decision.Outcome.GRANTED) {
                             visibleOf++;
                         }
-                        if (CommandMatcher.matches(profile.rules(), label)) {
+                        Decision.Outcome r = Decision.check(new Decision.Board(
+                                pluginsRule, helpRule, syncOn, required,
+                                target::hasPermission, profile.rules(), label, granted));
+                        if (r == Decision.Outcome.ALLOW
+                                || r == Decision.Outcome.GRANTED) {
                             runnableOf++;
                         }
                     }
@@ -432,6 +459,7 @@ public final class GuardCommand implements TabExecutor {
             }
         }
         int warnings = cfg == null ? 0 : cfg.warnings().size();
+        int validation = plugin.getLastValidationWarnings();
         int grants = 0;
         try {
             grants = plugin.getGrants()
@@ -448,8 +476,10 @@ public final class GuardCommand implements TabExecutor {
             selfOp = false;
         }
         sender.sendMessage("Diagnose: " + target.getName());
-        for (String line : Diagnose.report(new Diagnose.Input(enabled, bypass, selfOp,
-                world, groups, visibleOf, runnableOf, total, warnings, grants, syncOn))) {
+        for (String line : Diagnose.report(new Diagnose.Input(enabled,
+                plugin.isFilteringSuspended(), bypass, selfOp,
+                world, groups, visibleOf, runnableOf, total, warnings, validation,
+                grants, syncOn))) {
             sender.sendMessage(line);
         }
     }

@@ -29,13 +29,35 @@ final class SetupPlanTest {
     @Test
     void minimalWritesDefaultGroup() {
         YamlConfiguration cfg = new YamlConfiguration();
-        SetupPlan.from("minimal", false, false).applyTo(cfg);
+        boolean wasOn = SetupPlan.from("minimal", false, false).applyTo(cfg);
+        assertFalse(wasOn, "already off");
         assertEquals(List.of("help", "spawn", "msg",
                 "regex:^(msg|tell|w|r|reply)$", "!op", "!stop"),
                 cfg.getStringList("groups.default.commands"));
         assertEquals("<red>Unknown command.", cfg.getString("groups.default.blocked-message"));
+        assertTrue(cfg.getStringList("groups.default.inherit").isEmpty(), "inherit cleared");
         assertFalse(cfg.getBoolean("privacy.plugins-command.enabled"));
         assertFalse(cfg.getBoolean("permission-sync"));
+        assertFalse(cfg.getBoolean("enabled"));
+    }
+
+    @Test
+    void liveFilterTurnedOff() {
+        YamlConfiguration cfg = new YamlConfiguration();
+        cfg.set("enabled", true);
+        boolean wasOn = SetupPlan.from("custom", false, false).applyTo(cfg);
+        assertTrue(wasOn);
+        assertFalse(cfg.getBoolean("enabled"), "safe verification first");
+    }
+
+    @Test
+    void staleInheritCleared() {
+        YamlConfiguration cfg = new YamlConfiguration();
+        cfg.set("groups.default.inherit", List.of("staff"));
+        cfg.set("groups.default.commands", List.of("help"));
+        SetupPlan.from("minimal", false, false).applyTo(cfg);
+        assertTrue(cfg.getStringList("groups.default.inherit").isEmpty(),
+                "old parent must not leak commands in");
     }
 
     @Test
