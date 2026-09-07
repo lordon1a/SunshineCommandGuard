@@ -1,0 +1,19 @@
+name: SunshineCommandGuard
+version: 1.0.0
+main: com.sunshine.cmdguard.SunshineCommandGuard
+api-version: '1.21'
+author: Sunshine
+description: Command visibility, access control and server privacy.
+softdepend: [LuckPerms]
+commands:
+  cmdguard:
+    description: Command guard administration (reload, refresh, test, debug, dump).
+    usage: /cmdguard <reload|refresh|test|debug|dump>
+    permission: sunshine.cmdguard.admin
+permissions:
+  sunshine.cmdguard.bypass:
+    description: Bypasses all command filtering.
+    default: op
+  sunshine.cmdguard.admin:
+    description: Allows use of /cmdguard.
+    default: op

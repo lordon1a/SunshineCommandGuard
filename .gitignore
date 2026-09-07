@@ -1,0 +1,26 @@
+# Gradle
+.gradle/
+build/
+out/
+
+# Compiled
+*.class
+*.jar
+!gradle-wrapper.jar
+
+# Server-local dumps (never publish)
+commands_dump.yml
+config.generated.yml
+config.deploy.yml
+
+# Internal plan (Turkish, not for public repo)
+SUNSHINE_CMDGUARD_YAYIN_PLANI.md
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
