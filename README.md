@@ -1,36 +1,85 @@
 # SunshineCommandGuard
 
-Hide commands from tab-complete, block their execution, and keep your plugin list private — per LuckPerms group.
+[![Latest release](https://img.shields.io/github/v/release/lordon1a/SunshineCommandGuard?label=release)](https://github.com/lordon1a/SunshineCommandGuard/releases/latest)
+[![License: GPL-3.0](https://img.shields.io/github/license/lordon1a/SunshineCommandGuard)](LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/lordon1a/SunshineCommandGuard/total)](https://github.com/lordon1a/SunshineCommandGuard/releases)
+[![bStats servers](https://img.shields.io/bstats/servers/33904?label=servers)](https://bstats.org/plugin/bukkit/SunshineCommandGuard/33904)
+
+Hide commands from tab-complete, block their execution, and keep your plugin list private —
+all scoped **per LuckPerms group**, with an admin tool that tells you exactly why any given
+command is allowed or blocked before you ever flip the switch.
+
+Most servers run dozens of plugins, and every one of them registers commands, sub-commands,
+and namespaced aliases that regular players were never meant to see. `/plugins` hands out your
+whole stack to anyone who asks. Tab-complete leaks every admin tool you have. SunshineCommandGuard
+closes both doors without touching a single permission node you already have in LuckPerms.
+
+## Table of contents
+
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Configuration examples](#configuration-examples)
+- [Commands and permissions](#commands-and-permissions)
+- [Frequently asked questions](#frequently-asked-questions)
+- [Compatibility](#compatibility)
+- [Building from source](#building-from-source)
+- [Metrics](#metrics)
+- [License](#license)
 
 ## Features
 
 - **Tab-complete filtering** via `PlayerCommandSendEvent` — players only see what they may use.
-- **Execution blocking** — a command the player may not run behaves as an unknown command.
-- **Server privacy** — hides `/plugins`, `/pl`, `/ver`, `/version`, `/about` and `/help` behind custom messages.
-- **Per-group profiles** — groups resolved from LuckPerms permissions (`sunshine.cmdguard.group.<name>`), with `inherit` and `priority`.
-- **Flexible matching** — literal names, `regex:` patterns, negative `!entries` (deny always wins), and `plugin:<Name>` expansion.
-- **Hidden aliases** — commands that stay runnable but disappear from tab-complete.
-- **Argument-level rules** — per-command `args` allow/deny lists (e.g. limit `/gamemode` sub-arguments).
-- **Live verification** — `/cmdguard test <player> <command>` shows exactly why a command is allowed or blocked.
-- **bStats metrics** included (relocated, conflict-free).
+  The command doesn't just disappear from suggestions; the client never learns it exists.
+- **Execution blocking** — a command the player may not run behaves as an unknown command,
+  with a fully customizable message.
+- **Server privacy** — hides `/plugins`, `/pl`, `/ver`, `/version`, `/about` and `/help` behind
+  a message you write.
+- **Per-group profiles** — groups resolved from LuckPerms permissions
+  (`sunshine.cmdguard.group.<name>`), with `inherit` and `priority` so a `staff` group can
+  extend `vip`, which extends `default`, without repeating a single line.
+- **Flexible matching** — literal names, `regex:` patterns, negative `!entries` (deny always
+  wins), and `plugin:<Name>` expansion to grab every command a plugin registers in one line.
+- **Hidden aliases** — commands that stay fully runnable but disappear from tab-complete, for
+  the aliases you don't want advertised but still need to work.
+- **Argument-level rules** — per-command `args` allow/deny lists, e.g. let players use
+  `/gamemode survival` but not `/gamemode creative`.
+- **Live verification** — `/cmdguard test <player> <command>` prints the resolved group, the
+  matching rule, and the reason a command is visible or blocked, before you enable anything.
+- **bStats metrics** included, relocated so it never conflicts with another plugin's copy.
+
+## Screenshots
+
+All four below are taken on a live production server, not a demo instance — the block and
+privacy messages are that server's own text, fully customizable in `config.yml`.
+
+| | |
+| --- | --- |
+| ![Allowed command still tab-completes normally](docs/screenshots/tab-complete-allowed.png) **Allowed** — a whitelisted command completes normally. | ![Hidden command does not appear in tab-complete](docs/screenshots/tab-complete-hidden.png) **Hidden** — not suggested, not even recognized by the client's own command tree — but still runs if typed out in full. |
+| ![Non-whitelisted command is rejected as unknown](docs/screenshots/execution-blocked.png) **Blocked** — a command outside the group's list is invisible to the client and rejected as unknown. | ![The /plugins command is replaced with a custom message](docs/screenshots/plugins-privacy.png) **Server privacy** — `/plugins` returns a custom message instead of the real plugin list. |
 
 ## Requirements
 
 - Paper (or a Paper fork) **1.21.x**, Java **21**
-- LuckPerms is **optional** (`softdepend`): without it, every player falls back to the `default` group.
-- Players with the bypass permission or OP status skip all filtering.
+- LuckPerms is **optional** (`softdepend`): without it, every player falls back to the
+  `default` group.
+- Players with the bypass permission or OP status skip all filtering — always test with a
+  non-OP account.
 
 ## Installation
 
-1. Drop `SunshineCommandGuard-1.0.0.jar` into your `plugins/` folder and start the server once (this creates the default `config.yml`).
+1. Drop `SunshineCommandGuard-1.0.0.jar` into your `plugins/` folder and start the server once
+   (this creates the default `config.yml`).
 2. Edit `plugins/SunshineCommandGuard/config.yml` — define which commands each group may see.
-3. Verify **before** enabling: `/cmdguard test <player> <command>`.
+3. Verify **before** enabling: `/cmdguard test <player> <command>`, with a non-OP test account.
 4. Set `enabled: true`, then `/cmdguard reload`.
 
 ## ⚠️ Warning
 
-A misconfigured filter can leave players with **no visible commands at all**. The plugin therefore ships with `enabled: false`.
-Always review your groups and run `/cmdguard test` for a default-group player **before** setting `enabled: true`.
+A misconfigured filter can leave players with **no visible commands at all**. The plugin
+therefore ships with `enabled: false`. Always review your groups and run `/cmdguard test` for
+a default-group player **before** setting `enabled: true`.
 
 ## Configuration examples
 
@@ -81,11 +130,25 @@ groups:
     args: {}
 ```
 
-Matching rules: entries are matched case-insensitively, with or without a leading `/`, and
-namespaced labels (`essentials:heal`) also match their base name (`heal`).
-`!entry` denies (deny always wins), `regex:<pattern>` allows full-match patterns,
-`plugin:<Name>` expands to every command of that plugin. `hidden` entries are runnable
-but never suggested in tab-complete.
+Server privacy — replace `/plugins`, `/help`, and friends:
+
+```yaml
+privacy:
+  plugins-command:
+    enabled: true
+    message: "<gold>My Server <grey>| <white>Server information is private."
+    aliases: [plugins, pl, "bukkit:pl", "bukkit:plugins", ver, version, about, icanhasbukkit]
+  help-command:
+    enabled: true
+    message: "<yellow>Type <white>/help <yellow>for a list of commands."
+    aliases: ["?", "bukkit:help", "minecraft:help"]
+```
+
+**Matching rules:** entries are matched case-insensitively, with or without a leading `/`, and
+namespaced labels (`essentials:heal`) also match their base name (`heal`). `!entry` denies (deny
+always wins over any allow), `regex:<pattern>` allows full-match patterns, `plugin:<Name>`
+expands to every command that plugin registers. `hidden` entries are runnable but never
+suggested in tab-complete — use them for aliases you don't want advertised.
 
 ## Commands and permissions
 
@@ -103,10 +166,34 @@ but never suggested in tab-complete.
 | `sunshine.cmdguard.admin` | op | Allows use of `/cmdguard` |
 | `sunshine.cmdguard.group.<name>` | — | Assigns a player to group `<name>` (via LuckPerms) |
 
+## Frequently asked questions
+
+**Does this replace LuckPerms?** No. LuckPerms still controls what a player is *allowed* to
+run. SunshineCommandGuard controls what a player *sees* and what happens when they try
+something outside their group — a permission system and a visibility filter are different
+problems, and this plugin only solves the second one.
+
+**Will OPs and admins be affected?** No, by design — `sunshine.cmdguard.bypass` defaults to
+`op`, so operators always see and can run everything. Test with a real non-OP account, or the
+filter will look broken when it's actually just not being applied to you.
+
+**What happens to a hidden command if a player already knows it?** It still runs. `hidden`
+only removes a command from tab-complete suggestions; it's a different list from `commands`,
+which controls whether the command runs at all. Use `hidden` for aliases you don't want to
+advertise, and the plain block list for commands you actually want to deny.
+
+**Does this affect server performance?** Filtering runs on join and on `/cmdguard reload`, not
+on every keystroke — the client's command tree is rebuilt once per player, not recomputed for
+every tab press.
+
+**Can I use this without LuckPerms?** Yes. LuckPerms is a soft dependency; without it every
+player resolves to the `default` group.
+
 ## Compatibility
 
-Built against the **Paper 1.21.4 API (Java 21)**. Running in production on a Paper 26.2 server.
-Older/newer server versions are untested — please report what works.
+Built against the **Paper 1.21.4 API (Java 21)**. Running in production on a Paper 26.2
+server. Older/newer server versions are untested — please open an issue with what works or
+doesn't on your setup.
 
 ## Building from source
 
@@ -121,7 +208,7 @@ The uploaded jar must be the `shadowJar` output (`build/libs/...`), which bundle
 
 ## Metrics
 
-This plugin collects anonymous usage statistics via [bStats](https://bstats.org/).
+This plugin collects anonymous usage statistics via [bStats](https://bstats.org/plugin/bukkit/SunshineCommandGuard/33904).
 Server owners can opt out in `plugins/bStats/config.yml`.
 
 ## Keywords
@@ -131,3 +218,5 @@ command hide, tab complete, plugin hide, pl hide, command blocker, permissions, 
 ## License
 
 GPL-3.0 — see [LICENSE](LICENSE). Derivative works must stay open source.
+
+Issues and pull requests are welcome.
