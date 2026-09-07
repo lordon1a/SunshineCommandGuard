@@ -18,16 +18,24 @@ public final class GuardConfig {
     private final String bypassPermission;
     private final PrivacyRule pluginsCommand;
     private final PrivacyRule helpCommand;
+    private final boolean permissionSync;
+    private final MonitoringConfig monitoring;
+    private final UpdateCheckerConfig updateChecker;
     private final Map<String, GroupDef> groups;
     private final List<String> warnings;
 
     private GuardConfig(boolean enabled, String bypassPermission,
                         PrivacyRule pluginsCommand, PrivacyRule helpCommand,
+                        boolean permissionSync, MonitoringConfig monitoring,
+                        UpdateCheckerConfig updateChecker,
                         Map<String, GroupDef> groups, List<String> warnings) {
         this.enabled = enabled;
         this.bypassPermission = bypassPermission;
         this.pluginsCommand = pluginsCommand;
         this.helpCommand = helpCommand;
+        this.permissionSync = permissionSync;
+        this.monitoring = monitoring;
+        this.updateChecker = updateChecker;
         this.groups = Collections.unmodifiableMap(new LinkedHashMap<>(groups));
         this.warnings = Collections.unmodifiableList(new ArrayList<>(warnings));
     }
@@ -52,6 +60,21 @@ public final class GuardConfig {
         return helpCommand;
     }
 
+    /** When true, commands also require their own Bukkit permission node. */
+    public boolean permissionSync() {
+        return permissionSync;
+    }
+
+    /** Returns blocked-attempt monitoring settings. */
+    public MonitoringConfig monitoring() {
+        return monitoring;
+    }
+
+    /** Returns update-checker settings. */
+    public UpdateCheckerConfig updateChecker() {
+        return updateChecker;
+    }
+
     /** Returns groups keyed by lower-cased name. */
     public Map<String, GroupDef> groups() {
         return groups;
@@ -71,6 +94,7 @@ public final class GuardConfig {
         if (cfg == null) {
             warnings.add("no 'default' group defined; filtering disabled");
             return new GuardConfig(false, defaultBypass, emptyPlugins, emptyHelp,
+                    false, MonitoringConfig.disabled(), UpdateCheckerConfig.defaults(),
                     Map.of(), warnings);
         }
 
@@ -82,8 +106,12 @@ public final class GuardConfig {
 
         PrivacyRule pluginsCommand = readPrivacy(cfg, "privacy.plugins-command");
         PrivacyRule helpCommand = readPrivacy(cfg, "privacy.help-command");
+        boolean permissionSync = cfg.getBoolean("permission-sync", false);
+        MonitoringConfig monitoring = readMonitoring(cfg);
+        UpdateCheckerConfig updateChecker = readUpdateChecker(cfg);
 
-        Set<String> allowedTop = Set.of("enabled", "bypass-permission", "privacy", "groups");
+        Set<String> allowedTop = Set.of("enabled", "bypass-permission", "privacy", "groups",
+                "permission-sync", "monitoring", "update-checker");
         for (String key : cfg.getKeys(false)) {
             if (!allowedTop.contains(key)) {
                 warnings.add("unknown config key: " + key);
@@ -107,6 +135,7 @@ public final class GuardConfig {
                 }
                 List<String> commands = new ArrayList<>(cfg.getStringList(base + "commands"));
                 List<String> hidden = new ArrayList<>(cfg.getStringList(base + "hidden"));
+                List<String> worlds = new ArrayList<>(cfg.getStringList(base + "worlds"));
                 Map<String, ArgRule> args = new LinkedHashMap<>();
                 ConfigurationSection argsSec = cfg.getConfigurationSection(base + "args");
                 if (argsSec != null) {
@@ -130,8 +159,13 @@ public final class GuardConfig {
                         blocked,
                         Collections.unmodifiableList(commands),
                         Collections.unmodifiableList(hidden),
-                        Collections.unmodifiableMap(args));
+                        Collections.unmodifiableMap(args),
+                        Collections.unmodifiableList(worlds));
                 groups.put(key, def);
+                if (!worlds.isEmpty() && "default".equals(key)) {
+                    warnings.add("'default' group is restricted to worlds " + worlds
+                            + "; players elsewhere will be unfiltered");
+                }
             }
             if (!groups.containsKey("default")) {
                 warnings.add("no 'default' group defined; filtering disabled");
@@ -139,7 +173,31 @@ public final class GuardConfig {
             }
         }
 
-        return new GuardConfig(enabled, bypass, pluginsCommand, helpCommand, groups, warnings);
+        return new GuardConfig(enabled, bypass, pluginsCommand, helpCommand,
+                permissionSync, monitoring, updateChecker, groups, warnings);
+    }
+
+    /** Reads the monitoring section with safe defaults (everything off). */
+    private static MonitoringConfig readMonitoring(FileConfiguration cfg) {
+        boolean logBlocked = cfg.getBoolean("monitoring.log-blocked", false);
+        boolean notifyStaff = cfg.getBoolean("monitoring.notify-staff", false);
+        String notifyPermission = cfg.getString("monitoring.notify-permission",
+                "sunshine.cmdguard.notify");
+        if (notifyPermission == null || notifyPermission.trim().isEmpty()) {
+            notifyPermission = "sunshine.cmdguard.notify";
+        }
+        int cooldown = cfg.getInt("monitoring.notify-cooldown-seconds", 5);
+        return new MonitoringConfig(logBlocked, notifyStaff, notifyPermission, cooldown);
+    }
+
+    /** Reads the update-checker section (enabled, but inert without a Modrinth id). */
+    private static UpdateCheckerConfig readUpdateChecker(FileConfiguration cfg) {
+        boolean enabled = cfg.getBoolean("update-checker.enabled", true);
+        String modrinthId = cfg.getString("update-checker.modrinth-id", "");
+        if (modrinthId == null) {
+            modrinthId = "";
+        }
+        return new UpdateCheckerConfig(enabled, modrinthId.trim());
     }
 
     /** Reads one privacy section with safe defaults. */

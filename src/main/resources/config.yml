@@ -5,6 +5,25 @@ enabled: false
 
 bypass-permission: "sunshine.cmdguard.bypass"
 
+# permission-sync: also require each command's own Bukkit permission node.
+# A command is hidden/blocked unless the group allows it AND the player holds
+# the permission the owning plugin registered for it. Commands with no known
+# permission fall back to the group lists only. Default off.
+permission-sync: false
+
+# monitoring: what happens when a command is blocked. All optional.
+monitoring:
+  log-blocked: false
+  notify-staff: false
+  notify-permission: "sunshine.cmdguard.notify"
+  notify-cooldown-seconds: 5
+
+# update-checker: compares this version against Modrinth and logs when behind.
+# Fill in your Modrinth project id after publishing; empty = no check.
+update-checker:
+  enabled: true
+  modrinth-id: ""
+
 privacy:
   plugins-command:
     enabled: false
@@ -29,6 +48,8 @@ groups:
     # hidden: runnable but not shown in tab-complete (put aliases here)
     hidden: []
     args: {}
+    # worlds: restrict this group to these worlds (empty = all worlds).
+    worlds: []
 
   vip:
     priority: 10
@@ -36,6 +57,7 @@ groups:
     commands: []
     hidden: []
     args: {}
+    worlds: []
 
   staff:
     priority: 50
@@ -43,3 +65,4 @@ groups:
     commands: []
     hidden: []
     args: {}
+    worlds: []

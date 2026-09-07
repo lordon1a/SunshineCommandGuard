@@ -15,6 +15,8 @@ import org.bukkit.event.Listener;
 public final class TabCompleteListener implements Listener {
 
     private volatile GroupResolver resolver;
+    private volatile GuardConfig config;
+    private volatile GrantStore grants;
     private final Logger logger;
 
     /** Creates a listener with resolver and logger. */
@@ -26,6 +28,16 @@ public final class TabCompleteListener implements Listener {
     /** Updates the resolver after reload. */
     public void setResolver(GroupResolver resolver) {
         this.resolver = resolver;
+    }
+
+    /** Updates the config after reload. */
+    public void setConfig(GuardConfig config) {
+        this.config = config;
+    }
+
+    /** Sets the temporary-grant store (null disables grants). */
+    public void setGrants(GrantStore grants) {
+        this.grants = grants;
     }
 
     /** Filters completions without touching live game state. */
@@ -81,7 +93,9 @@ public final class TabCompleteListener implements Listener {
                         }
                     }
                     String toMatch = ws >= 0 ? cand.substring(0, ws) : cand;
-                    if (CommandMatcher.matches(profile.visibleRules(), toMatch)) {
+                    if (isGranted(id, toMatch)
+                            || (CommandMatcher.matches(profile.visibleRules(), toMatch)
+                            && !syncDenies(current, player, toMatch))) {
                         filtered.add(suggestion);
                     }
                 }
@@ -113,6 +127,33 @@ public final class TabCompleteListener implements Listener {
                 logger.warning("tab complete filter failed: " + ex.getMessage());
             } catch (Exception ignored) {
             }
+        }
+    }
+
+    /** True when the player holds a live grant for this command. Fail-closed on error. */
+    private boolean isGranted(UUID id, String command) {
+        GrantStore grantStore = grants;
+        if (grantStore == null || id == null) {
+            return false;
+        }
+        try {
+            return grantStore.isGranted(id, command, System.currentTimeMillis());
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    /** True when permission-sync hides this command. Fail-open on error. */
+    private boolean syncDenies(GroupResolver current, Player player, String command) {
+        GuardConfig cfg = config;
+        if (cfg == null || !cfg.permissionSync()) {
+            return false;
+        }
+        try {
+            return GroupResolver.evaluateSync(true, current.requiredPermission(command),
+                    player::hasPermission) == GroupResolver.SyncVerdict.DENY;
+        } catch (Exception ex) {
+            return false;
         }
     }
 }

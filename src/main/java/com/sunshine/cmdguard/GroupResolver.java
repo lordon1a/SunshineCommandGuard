@@ -19,6 +19,7 @@ public final class GroupResolver {
 
     private final GuardConfig config;
     private final Map<String, Set<String>> pluginIndex;
+    private final Map<String, String> commandPermissions;
     private final Logger logger;
     private final Map<UUID, ResolvedProfile> cache = new ConcurrentHashMap<>();
     private final Set<UUID> noGroupWarned = ConcurrentHashMap.newKeySet();
@@ -26,8 +27,16 @@ public final class GroupResolver {
     /** Creates a resolver with config, plugin index and logger. */
     public GroupResolver(GuardConfig config, Map<String, Set<String>> pluginIndex,
                          Logger logger) {
+        this(config, pluginIndex, Map.of(), logger);
+    }
+
+    /** Creates a resolver with an extra root-command -&gt; permission map for permission-sync. */
+    public GroupResolver(GuardConfig config, Map<String, Set<String>> pluginIndex,
+                         Map<String, String> commandPermissions, Logger logger) {
         this.config = config;
         this.pluginIndex = pluginIndex == null ? Map.of() : new LinkedHashMap<>(pluginIndex);
+        this.commandPermissions = commandPermissions == null
+                ? Map.of() : new LinkedHashMap<>(commandPermissions);
         this.logger = logger;
     }
 
@@ -105,11 +114,19 @@ public final class GroupResolver {
 
     /** Group names the player currently matches, in ascending priority order. */
     public List<String> matchedGroups(Player player) {
+        String world = null;
+        if (player != null) {
+            try {
+                world = player.getWorld().getName();
+            } catch (Exception ex) {
+                world = null;
+            }
+        }
         List<GroupDef> matched = new ArrayList<>();
-        for (Map.Entry<String, GroupDef> e : config.groups().entrySet()) {
-            String name = e.getKey();
+        for (GroupDef def : filterByWorld(config.groups().values(), world)) {
+            String name = def.name();
             if ("default".equals(name)) {
-                matched.add(e.getValue());
+                matched.add(def);
                 continue;
             }
             boolean has;
@@ -120,7 +137,7 @@ public final class GroupResolver {
                 continue;
             }
             if (has) {
-                matched.add(e.getValue());
+                matched.add(def);
             }
         }
         if (!config.groups().containsKey("default")) {
@@ -136,6 +153,20 @@ public final class GroupResolver {
         List<String> out = new ArrayList<>();
         for (GroupDef d : matched) {
             out.add(d.name());
+        }
+        return out;
+    }
+
+    /** Returns the defs applying in the given world, preserving order. Null-safe. */
+    public static List<GroupDef> filterByWorld(Collection<GroupDef> defs, String world) {
+        List<GroupDef> out = new ArrayList<>();
+        if (defs == null) {
+            return out;
+        }
+        for (GroupDef def : defs) {
+            if (def != null && def.matchesWorld(world)) {
+                out.add(def);
+            }
         }
         return out;
     }
@@ -283,9 +314,48 @@ public final class GroupResolver {
         visited.add(cur);
     }
 
+    /** Permission-sync verdict for one command check. */
+    public enum SyncVerdict { ALLOW, DENY, ABSTAIN }
+
+    /**
+     * Returns the Bukkit permission node registered for a root command, or null
+     * when the command declares none. Namespace-insensitive.
+     */
+    public String requiredPermission(String command) {
+        String token = CommandMatcher.normalize(command);
+        if (token.isEmpty()) {
+            return null;
+        }
+        String perm = commandPermissions.get(token);
+        if ((perm == null || perm.isEmpty())) {
+            perm = commandPermissions.get(CommandMatcher.stripNamespace(token));
+        }
+        return (perm == null || perm.isEmpty()) ? null : perm;
+    }
+
+    /**
+     * Pure permission-sync evaluation. ALLOW/ABSTAIN keep the group-list decision,
+     * DENY hides/blocks the command. Any lookup failure abstains (fail-open).
+     */
+    public static SyncVerdict evaluateSync(boolean syncEnabled, String requiredPermission,
+                                           Function<String, Boolean> hasPermission) {
+        if (!syncEnabled || requiredPermission == null || requiredPermission.isEmpty()) {
+            return SyncVerdict.ABSTAIN;
+        }
+        if (hasPermission == null) {
+            return SyncVerdict.ABSTAIN;
+        }
+        boolean has;
+        try {
+            has = Boolean.TRUE.equals(hasPermission.apply(requiredPermission));
+        } catch (Exception ex) {
+            return SyncVerdict.ABSTAIN;
+        }
+        return has ? SyncVerdict.ALLOW : SyncVerdict.DENY;
+    }
+
     /** Expands a plugin name to its commands, or null when unknown. */
-    private Set<String> expandPlugin(String pluginName) {
-        if (pluginName == null) {
+    private Set<String> expandPlugin(String pluginName) {        if (pluginName == null) {
             return null;
         }
         String key = pluginName.trim().toLowerCase(Locale.ROOT);

@@ -2,11 +2,12 @@ package com.sunshine.cmdguard;
 
 import java.util.Map;
 import java.util.Set;
+import net.kyori.adventure.text.Component;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /** Entry point for the command visibility and access control plugin. */
-public final class SunshineCommandGuard extends JavaPlugin {
+public final class SunshineCommandGuard extends JavaPlugin implements StaffNotifier {
 
     // https://bstats.org/plugin/bukkit/SunshineCommandGuard/33904
     private static final int BSTATS_PLUGIN_ID = 33904;
@@ -15,6 +16,9 @@ public final class SunshineCommandGuard extends JavaPlugin {
     private volatile GroupResolver resolver;
     private volatile Map<String, Set<String>> pluginIndex;
     private volatile boolean filteringSuspended;
+    private volatile boolean updateChecked;
+
+    private final GrantStore grants = new GrantStore();
 
     private VisibilityListener visibilityListener;
     private ExecutionListener executionListener;
@@ -31,12 +35,13 @@ public final class SunshineCommandGuard extends JavaPlugin {
         getServer().getPluginManager().registerEvents(visibilityListener, this);
         getServer().getPluginManager().registerEvents(executionListener, this);
         getServer().getPluginManager().registerEvents(tabCompleteListener, this);
+        getServer().getPluginManager().registerEvents(new WorldChangeListener(this), this);
         GuardCommand cmd = new GuardCommand(this);
         if (getCommand("cmdguard") != null) {
             getCommand("cmdguard").setExecutor(cmd);
             getCommand("cmdguard").setTabCompleter(cmd);
         }
-        getServer().getScheduler().runTask(this, this::reload);
+        CompatScheduler.runNextTick(this, this::reload);
         boolean filtering = config != null && config.enabled() && !filteringSuspended;
         getLogger().info("SunshineCommandGuard enabled; filtering=" + filtering);
     }
@@ -68,7 +73,14 @@ public final class SunshineCommandGuard extends JavaPlugin {
             getLogger().warning("plugin index failed: " + ex.getMessage());
             index = Map.of();
         }
-        GroupResolver fresh = new GroupResolver(loaded, index, getLogger());
+        Map<String, String> commandPermissions;
+        try {
+            commandPermissions = CommandScan.permissionMap(CommandScan.scan(getServer()));
+        } catch (Exception ex) {
+            getLogger().warning("command permission scan failed: " + ex.getMessage());
+            commandPermissions = Map.of();
+        }
+        GroupResolver fresh = new GroupResolver(loaded, index, commandPermissions, getLogger());
         this.config = loaded;
         this.pluginIndex = index;
         this.resolver = fresh;
@@ -77,14 +89,22 @@ public final class SunshineCommandGuard extends JavaPlugin {
         }
         if (!filteringSuspended) {
             visibilityListener.setResolver(fresh);
+            visibilityListener.setConfig(loaded);
+            visibilityListener.setGrants(grants);
             executionListener.setConfig(loaded);
             executionListener.setResolver(fresh);
+            executionListener.setGrants(grants);
+            executionListener.setStaffNotifier(this);
             tabCompleteListener.setResolver(fresh);
+            tabCompleteListener.setConfig(loaded);
+            tabCompleteListener.setGrants(grants);
         } else {
             visibilityListener.setResolver(null);
+            visibilityListener.setConfig(loaded);
             executionListener.setConfig(loaded);
             executionListener.setResolver(null);
             tabCompleteListener.setResolver(null);
+            tabCompleteListener.setConfig(loaded);
         }
         for (Player p : getServer().getOnlinePlayers()) {
             try {
@@ -95,6 +115,15 @@ public final class SunshineCommandGuard extends JavaPlugin {
         }
         getLogger().info("SunshineCommandGuard reloaded; groups=" + loaded.groups().size()
                 + " warnings=" + loaded.warnings().size());
+        if (!updateChecked) {
+            updateChecked = true;
+            try {
+                UpdateChecker.checkAsync(this, getDescription().getVersion(),
+                        loaded.updateChecker(), getLogger());
+            } catch (Exception ex) {
+                getLogger().fine("update check failed: " + ex.getMessage());
+            }
+        }
     }
 
     /** Returns the current config, may be null before first reload. */
@@ -110,9 +139,34 @@ public final class SunshineCommandGuard extends JavaPlugin {
         return resolver;
     }
 
+    /** Returns the temporary-grant store. */
+    public GrantStore getGrants() {
+        return grants;
+    }
+
     /** Returns the resolver even when suspended; for admin diagnostics. */
     public GroupResolver getRawResolver() {
         return resolver;
+    }
+
+    /** Sends a message to online staff holding the configured notify permission. */
+    @Override
+    public void notifyStaff(Component message) {
+        if (message == null) {
+            return;
+        }
+        GuardConfig cfg = config;
+        String perm = cfg == null || cfg.monitoring() == null
+                ? "sunshine.cmdguard.notify" : cfg.monitoring().notifyPermission();
+        for (Player p : getServer().getOnlinePlayers()) {
+            try {
+                if (p.hasPermission(perm)) {
+                    p.sendMessage(message);
+                }
+            } catch (Exception ex) {
+                getLogger().fine("staff notify failed for " + p.getName());
+            }
+        }
     }
 
     /** Returns true when runtime filtering is suspended via debug. */

@@ -47,6 +47,19 @@ closes both doors without touching a single permission node you already have in 
   `/gamemode survival` but not `/gamemode creative`.
 - **Live verification** — `/cmdguard test <player> <command>` prints the resolved group, the
   matching rule, and the reason a command is visible or blocked, before you enable anything.
+- **One-command setup** — `/cmdguard generate` scans your live server and writes a reviewed
+  starter config (`config.generated.yml`): commands nobody needs a permission for go to
+  `default`, permission-gated ones to `staff`. Copy what you want into `config.yml`.
+- **Permission-sync mode** — optionally also require each command's own Bukkit permission node,
+  so players automatically lose commands their rank can't run, with zero list maintenance.
+- **Temporary grants** — `/cmdguard grant <player> <command> <10m|2h|1d>` opens one command for
+  a limited time (events, support cases), `/cmdguard ungrant` takes it back. No config edits.
+- **Per-world groups** — restrict any group to specific worlds (`worlds: [arena]`), with the
+  profile refreshing automatically on world change.
+- **Block monitoring** — log every blocked attempt and/or ping online staff (throttled), so
+  reconnaissance attempts don't go unnoticed.
+- **Update checker + Folia support** — console notice when a new release is on Modrinth, and
+  the same jar runs on Folia.
 - **bStats metrics** included, relocated so it never conflicts with another plugin's copy.
 
 ## Screenshots
@@ -69,9 +82,10 @@ privacy messages are that server's own text, fully customizable in `config.yml`.
 
 ## Installation
 
-1. Drop `SunshineCommandGuard-1.0.0.jar` into your `plugins/` folder and start the server once
+1. Drop `SunshineCommandGuard-1.1.0.jar` into your `plugins/` folder and start the server once
    (this creates the default `config.yml`).
-2. Edit `plugins/SunshineCommandGuard/config.yml` — define which commands each group may see.
+2. Run `/cmdguard generate` and copy the useful parts of `config.generated.yml` into
+   `config.yml` — or write your groups by hand.
 3. Verify **before** enabling: `/cmdguard test <player> <command>`, with a non-OP test account.
 4. Set `enabled: true`, then `/cmdguard reload`.
 
@@ -150,6 +164,38 @@ always wins over any allow), `regex:<pattern>` allows full-match patterns, `plug
 expands to every command that plugin registers. `hidden` entries are runnable but never
 suggested in tab-complete — use them for aliases you don't want advertised.
 
+Optional top-level modes (all backward compatible — old configs load unchanged):
+
+```yaml
+# Also require each command's own Bukkit permission node.
+permission-sync: false
+
+monitoring:
+  log-blocked: false        # log every blocked attempt to console
+  notify-staff: false       # message online staff on blocked attempts
+  notify-permission: "sunshine.cmdguard.notify"
+  notify-cooldown-seconds: 5  # per-player throttle
+
+update-checker:
+  enabled: true
+  modrinth-id: ""           # fill in after publishing; empty = no check
+```
+
+Per-world groups — a group with `worlds` only matches there (empty = everywhere).
+If `default` itself is world-restricted you get a config warning, because players outside
+those worlds would be unfiltered:
+
+```yaml
+groups:
+  minigames:
+    priority: 20
+    inherit: [default]
+    commands: [queue, leave, spectate]
+    hidden: []
+    args: {}
+    worlds: [arena, lobby]
+```
+
 ## Commands and permissions
 
 | Command | Permission | Description |
@@ -159,11 +205,15 @@ suggested in tab-complete — use them for aliases you don't want advertised.
 | `/cmdguard test <player> <command>` | `sunshine.cmdguard.admin` | Show groups, visibility, reason for a command |
 | `/cmdguard debug` | `sunshine.cmdguard.admin` | Suspend/resume filtering at runtime (no config write) |
 | `/cmdguard dump` | `sunshine.cmdguard.admin` | Write all registered commands to `commands_dump.yml` |
+| `/cmdguard generate` | `sunshine.cmdguard.admin` | Write a review-ready starter config to `config.generated.yml` |
+| `/cmdguard grant <player> <command> <30s\|10m\|2h\|1d>` | `sunshine.cmdguard.admin` | Temporarily allow one command (memory-only, lost on restart) |
+| `/cmdguard ungrant <player> [command]` | `sunshine.cmdguard.admin` | Revoke one or all temporary grants |
 
 | Permission | Default | Description |
 | --- | --- | --- |
 | `sunshine.cmdguard.bypass` | op | Bypasses all command filtering |
 | `sunshine.cmdguard.admin` | op | Allows use of `/cmdguard` |
+| `sunshine.cmdguard.notify` | op | Receives blocked-command staff notifications |
 | `sunshine.cmdguard.group.<name>` | — | Assigns a player to group `<name>` (via LuckPerms) |
 
 ## Frequently asked questions
@@ -191,15 +241,16 @@ player resolves to the `default` group.
 
 ## Compatibility
 
-Built against the **Paper 1.21.4 API (Java 21)**. Running in production on a Paper 26.2
-server. Older/newer server versions are untested — please open an issue with what works or
-doesn't on your setup.
+Built against the **Paper 1.21.4 API (Java 21)**. Tested on a clean Paper 26.2 server (v1.1.0:
+clean enable, `groups=3 warnings=0`) and running in production on Paper 26.2. The same jar
+runs on **Folia**. Older/newer server versions are untested — please open an issue with what
+works or doesn't on your setup.
 
 ## Building from source
 
 ```powershell
-.\gradlew.bat build   # needs JDK 21, output: build/libs/SunshineCommandGuard-1.0.0.jar
-.\gradlew.bat test    # 32 unit tests (JUnit 5)
+.\gradlew.bat build   # needs JDK 21, output: build/libs/SunshineCommandGuard-1.1.0.jar
+.\gradlew.bat test    # 65 unit tests (JUnit 5)
 ```
 
 The uploaded jar must be the `shadowJar` output (`build/libs/...`), which bundles bStats
