@@ -26,7 +26,7 @@ if ($testSources) {
 
 Copy-Item src\main\resources\* build\classes\ -Force -Recurse
 Push-Location build\classes
-& "$jdk\jar.exe" cf ..\..\SunshineCommandGuard-1.3.0.jar *
+& "$jdk\jar.exe" cf ..\..\SunshineCommandGuard-1.4.0.jar *
 Pop-Location
 if ($LASTEXITCODE -ne 0) { Pop-Location; exit 1 }
 

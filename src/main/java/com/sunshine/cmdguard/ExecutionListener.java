@@ -1,5 +1,8 @@
 package com.sunshine.cmdguard;
 
+import com.sunshine.commandguard.api.BlockReason;
+
+import java.util.Locale;
 import java.util.logging.Logger;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -99,7 +102,7 @@ public final class ExecutionListener implements Listener {
                         ? pluginsRule : helpRule;
                 String privacyMessage = hit == null ? "" : hit.message();
                 sendPrivacyMessage(player, privacyMessage, profile.blockedMessage(), token);
-                reportBlocked(player, token, "privacy");
+                reportBlocked(player, token, ApiBridge.reasonOf(Decision.Outcome.DENY_PRIVACY));
                 return;
             }
             case DENY_NAMESPACE, DENY_SYNC, DENY_LIST -> {
@@ -112,17 +115,21 @@ public final class ExecutionListener implements Listener {
                         logger.warning("blocked message failed: " + ex.getMessage());
                     }
                 }
-                reportBlocked(player, token,
-                        verdict == Decision.Outcome.DENY_NAMESPACE ? "namespace-protection"
-                                : verdict == Decision.Outcome.DENY_SYNC
-                                ? "permission-sync" : "group-list");
+                reportBlocked(player, token, ApiBridge.reasonOf(verdict));
                 return;
             }
         }
     }
 
-    /** Logs and optionally notifies staff about a blocked attempt. */
-    private void reportBlocked(Player player, String token, String reason) {
+    /**
+     * Central blocked-attempt reporting: fires the public 1.4.0 API event exactly
+     * once (independent of monitoring settings), then logs and optionally notifies
+     * staff. Both deny branches funnel through this single method, so one blocked
+     * command attempt can never produce duplicate API events.
+     */
+    private void reportBlocked(Player player, String token, BlockReason reason) {
+        ApiBridge.emit(player.getUniqueId(), player.getName(), token, reason,
+                player.getWorld() == null ? null : player.getWorld().getName());
         GuardConfig cfg = config;
         if (cfg == null || cfg.monitoring() == null) {
             return;
@@ -130,7 +137,7 @@ public final class ExecutionListener implements Listener {
         MonitoringConfig mon = cfg.monitoring();
         if (mon.logBlocked()) {
             logger.info("blocked command '" + token + "' for " + player.getName()
-                    + " (" + reason + ")");
+                    + " (" + logLabel(reason) + ")");
         }
         if (!mon.notifyStaff()) {
             return;
@@ -151,6 +158,14 @@ public final class ExecutionListener implements Listener {
             logger.fine("staff notify failed: " + ex.getMessage());
         }
     }
+    /** Maps the public reason to the historical log label (behavior unchanged). */
+    private static String logLabel(BlockReason reason) {
+        if (reason == null) {
+            return "unknown";
+        }
+        return reason.name().toLowerCase(Locale.ROOT).replace('_', '-');
+    }
+
     /** Sends a privacy message, falling back to the group blocked message. */
     private void sendPrivacyMessage(Player player, String privacyMessage,
                                     String blockedMessage, String token) {

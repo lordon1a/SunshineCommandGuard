@@ -94,7 +94,7 @@ privacy messages are that server's own text, fully customizable in `config.yml`.
 
 ## Installation
 
-1. Drop `SunshineCommandGuard-1.3.0.jar` into your `plugins/` folder and start the server once
+1. Drop `SunshineCommandGuard-1.4.0.jar` into your `plugins/` folder and start the server once
    (this creates the default `config.yml`).
 2. Run `/cmdguard setup` in-game and answer three questions — or run `/cmdguard generate`
    and copy the useful parts of `config.generated.yml` into `config.yml`.
@@ -354,15 +354,30 @@ player resolves to the `default` group.
 
 ## Compatibility
 
-Built against the **Paper 1.21.4 API (Java 21)**. Tested on a clean Paper 26.2 server (v1.3.0:
+Built against the **Paper 1.21.4 API (Java 21)**. Tested on a clean Paper 26.2 server (v1.4.0:
 clean enable, validator flags unregistered template entries). The same jar
 runs on **Folia**. Older/newer server versions are untested — please open an issue with what
 works or doesn't on your setup.
 
+## Developer API (1.4.0+)
+
+CommandGuard fires a public monitoring event for integrations such as
+[Sunshine Sentinel](https://github.com/lordon1a/SunshineSentinel):
+
+- `com.sunshine.commandguard.api.event.CommandGuardBlockedEvent` — fired **exactly once** after a
+  command attempt is definitively blocked, with `getPlayerId()`, `getPlayerName()`,
+  `getCommandToken()`, `getReason()` (`com.sunshine.commandguard.api.BlockReason`),
+  `getTimestamp()` and `getWorld()`.
+- **Non-cancellable** — listeners observe the decision, they can never unblock a command.
+- The token is the **normalized root command** with all arguments stripped and the namespace
+  preserved: `/plugins` → `plugins`, `/BUKKIT:Plugins` → `bukkit:plugins`,
+  `/minecraft:help foo bar` → `minecraft:help`.
+- **Privacy:** no command arguments, chat content, IPs or credentials ever appear in the event.
+
 ## Building from source
 
 ```powershell
-.\gradlew.bat build   # needs JDK 21, output: build/libs/SunshineCommandGuard-1.3.0.jar
+.\gradlew.bat build   # needs JDK 21, output: build/libs/SunshineCommandGuard-1.4.0.jar
 .\gradlew.bat test    # unit tests (JUnit 5)
 ```
 

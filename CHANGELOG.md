@@ -2,6 +2,23 @@
 
 All notable changes to SunshineCommandGuard are documented here.
 
+## [1.4.0] - 2026-09-09
+
+### Added
+
+- Added the public API package `com.sunshine.commandguard.api` with the stable
+  `BlockReason` enum and the non-cancellable `CommandGuardBlockedEvent`, fired exactly
+  once per blocked command attempt from the central reporting path with the normalized
+  root command token (namespace preserved, arguments never included).
+- Added contract tests covering event payload, namespace preservation, argument
+  stripping, reason mapping and dispatcher failure isolation.
+
+### Notes
+
+- Existing blocking semantics, permission behavior and configuration keys are unchanged;
+  the API is a one-way observation hook and CommandGuard remains fully usable without
+  Sunshine Sentinel.
+
 ## [1.3.0] - 2026-09-07
 
 ### Added
@@ -71,6 +88,7 @@ All notable changes to SunshineCommandGuard are documented here.
 - Initial public release.
 
 [1.2.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.2.0
+[1.4.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.4.0
 [1.3.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.3.0
 [1.1.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.1.0
 [1.0.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.0.0
