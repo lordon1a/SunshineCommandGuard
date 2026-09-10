@@ -37,18 +37,19 @@ final class GuardConfigSchemaTest {
                 + "  notify-staff: true\n"
                 + "  notify-permission: \"custom.notify\"\n"
                 + "  notify-cooldown-seconds: 10\n"
-                + "update-checker:\n"
+                + "updates:\n"
                 + "  enabled: false\n"
-                + "  modrinth-id: \"abc123\"\n");
+                + "  notify-console: false\n"
+                + "  notify-admins: true\n");
         assertTrue(cfg.enabled());
         assertTrue(cfg.permissionSync());
         assertTrue(cfg.monitoring().logBlocked());
         assertTrue(cfg.monitoring().notifyStaff());
         assertEquals("custom.notify", cfg.monitoring().notifyPermission());
         assertEquals(10_000L, cfg.monitoring().notifyCooldownMillis());
-        assertFalse(cfg.updateChecker().enabled());
-        assertEquals("abc123", cfg.updateChecker().modrinthId());
-        assertFalse(cfg.updateChecker().configured(), "disabled means not configured");
+        assertFalse(cfg.updates().enabled());
+        assertFalse(cfg.updates().notifyConsole());
+        assertTrue(cfg.updates().notifyAdmins());
         assertTrue(cfg.warnings().isEmpty());
     }
 
@@ -78,9 +79,7 @@ final class GuardConfigSchemaTest {
         assertFalse(cfg.monitoring().logBlocked());
         assertFalse(cfg.monitoring().notifyStaff());
         assertEquals("sunshine.cmdguard.notify", cfg.monitoring().notifyPermission());
-        assertTrue(cfg.updateChecker().enabled());
-        assertEquals("", cfg.updateChecker().modrinthId());
-        assertFalse(cfg.updateChecker().configured(), "empty id means inert");
+        assertEquals(UpdateConfig.defaults(), cfg.updates(), "missing section notifies everywhere");
         assertTrue(cfg.antiEnumeration().enabled(), "old configs get secure defaults");
         assertTrue(cfg.antiEnumeration().hideNamespacedCommands());
         assertEquals(List.of(), cfg.groups().get("default").worlds());

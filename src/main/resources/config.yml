@@ -18,11 +18,13 @@ monitoring:
   notify-permission: "sunshine.cmdguard.notify"
   notify-cooldown-seconds: 5
 
-# update-checker: compares this version against Modrinth and logs when behind.
-# Fill in your Modrinth project id after publishing; empty = no check.
-update-checker:
+# update notifications: notify-only GitHub Releases check.
+# Nothing is ever downloaded or installed. Setting enabled: false
+# disables the external request entirely.
+updates:
   enabled: true
-  modrinth-id: ""
+  notify-console: true
+  notify-admins: true
 
 privacy:
   plugins-command:

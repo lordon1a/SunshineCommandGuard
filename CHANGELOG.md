@@ -4,8 +4,16 @@ All notable changes to SunshineCommandGuard are documented here.
 
 ## [1.4.1] - 2026-09-10
 
-Production hardening and cache consistency. No new features, no config format
-changes; existing `config.yml` files load unchanged.
+Production hardening and cache consistency, plus notify-only update
+notifications. The new `updates:` config section is optional; existing
+`config.yml` files load unchanged (a leftover `update-checker:` section
+reports one unknown-key warning).
+
+### Added
+
+- Added optional update notifications. CommandGuard can now notify the console
+  and administrators when a newer GitHub release is available. Updates are
+  never downloaded or installed automatically.
 
 ### Fixed
 

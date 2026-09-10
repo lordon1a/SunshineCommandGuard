@@ -71,8 +71,8 @@ closes both doors without touching a single permission node you already have in 
   profile refreshing automatically on world change.
 - **Block monitoring** — log every blocked attempt and/or ping online staff (throttled), so
   reconnaissance attempts don't go unnoticed.
-- **Update checker** — console notice when a new release is on Modrinth, once you set
-  `update-checker.modrinth-id` (empty by default, so no check runs out of the box).
+- **Update notifications** — console and admin-join notice when a newer GitHub release
+  exists (notify-only; see below).
 - **bStats metrics** included, relocated so it never conflicts with another plugin's copy.
 
 ## Screenshots
@@ -282,9 +282,10 @@ monitoring:
   notify-permission: "sunshine.cmdguard.notify"
   notify-cooldown-seconds: 5  # per-player throttle
 
-update-checker:
-  enabled: true
-  modrinth-id: ""           # fill in after publishing; empty = no check
+updates:
+  enabled: true             # GitHub Releases check (notify-only)
+  notify-console: true
+  notify-admins: true
 ```
 
 Per-world groups — a group with `worlds` only matches there (empty = everywhere).
@@ -390,6 +391,24 @@ The uploaded jar must be the `shadowJar` output (`build/libs/...`), which bundle
 
 This plugin collects anonymous usage statistics via [bStats](https://bstats.org/plugin/bukkit/SunshineCommandGuard/33904).
 Server owners can opt out in `plugins/bStats/config.yml`.
+
+## Update notifications
+
+CommandGuard can check GitHub Releases for a newer version, once per server
+start. **SunshineCommandGuard never automatically downloads or installs updates.**
+
+```yaml
+updates:
+  enabled: true
+  notify-console: true
+  notify-admins: true
+```
+
+Setting `updates.enabled: false` disables the external update request entirely —
+no HTTP call is made and no message is shown. Admins holding
+`sunshine.cmdguard.admin` are notified once per server session on join, with a
+clickable link to the release page. The check is notify-only: no downloads, no
+restarts, no telemetry.
 
 ## Keywords
 

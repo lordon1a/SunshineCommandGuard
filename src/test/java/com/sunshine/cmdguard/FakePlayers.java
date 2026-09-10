@@ -12,16 +12,18 @@ import org.bukkit.entity.Player;
  * UUID and safe defaults for everything else. Lets unit tests exercise
  * resolve/snapshot/invalidation logic without a server.
  */
-final class FakePlayers {
+public final class FakePlayers {
 
     /** Mutable script behind one fake player. */
-    static final class Script {
-        final UUID id = UUID.randomUUID();
-        String name = "TestPlayer";
-        boolean op;
-        final Map<String, Boolean> permissions = new HashMap<>();
+    public static final class Script {
+        public final UUID id = UUID.randomUUID();
+        public String name = "TestPlayer";
+        public boolean op;
+        public final Map<String, Boolean> permissions = new HashMap<>();
         /** When true, any permission query throws (proves async-safe paths). */
-        boolean throwOnPermission;
+        public boolean throwOnPermission;
+        /** Everything sent to this player, in order. */
+        public final java.util.List<Object> outbox = new java.util.concurrent.CopyOnWriteArrayList<>();
     }
 
     private FakePlayers() {}
@@ -32,7 +34,7 @@ final class FakePlayers {
      * (invoked with the proxy method arguments).
      */
     @SuppressWarnings("unchecked")
-    static <T> T stub(Class<T> iface, java.util.Map<String, Object> scripted) {
+    public static <T> T stub(Class<T> iface, java.util.Map<String, Object> scripted) {
         InvocationHandler handler = (proxy, method, args) -> {
             if (scripted.containsKey(method.getName())) {
                 Object v = scripted.get(method.getName());
@@ -57,7 +59,7 @@ final class FakePlayers {
     }
 
     /** Creates a Player proxy driven by the given script. */
-    static Player player(Script script) {
+    public static Player player(Script script) {
         InvocationHandler handler = (proxy, method, args) -> {            switch (method.getName()) {
                 case "getUniqueId":
                     return script.id;
@@ -77,6 +79,11 @@ final class FakePlayers {
                     return false;
                 case "toString":
                     return "FakePlayer(" + script.name + ")";
+                case "sendMessage":
+                    if (args != null && args.length >= 1 && args[0] != null) {
+                        script.outbox.add(args[0]);
+                    }
+                    return null;
                 case "hashCode":
                     return System.identityHashCode(proxy);
                 case "equals":

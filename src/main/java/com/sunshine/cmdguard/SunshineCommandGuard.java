@@ -5,6 +5,8 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import com.sunshine.cmdguard.update.GitHubUpdateChecker;
+import com.sunshine.cmdguard.update.UpdateJoinListener;
 import net.kyori.adventure.text.Component;
 import org.bukkit.World;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -21,9 +23,10 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
     private volatile GroupResolver resolver;
     private volatile Map<String, Set<String>> pluginIndex;
     private volatile boolean filteringSuspended;
-    private volatile boolean updateChecked;
     private volatile int lastValidationWarnings;
     private volatile boolean luckPermsHooked;
+
+    private final GitHubUpdateChecker updateChecker = new GitHubUpdateChecker();
 
     private final GrantStore grants = new GrantStore();
     private final SetupWizard setupWizard = new SetupWizard(this);
@@ -47,6 +50,9 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
         getServer().getPluginManager().registerEvents(
                 new QuitListener(this::getRawResolver, executionListener::discard,
                         setupWizard::cancel, getLogger()),
+                this);
+        getServer().getPluginManager().registerEvents(
+                new UpdateJoinListener(updateChecker, this::liveUpdateConfig, getLogger()),
                 this);
         GuardCommand cmd = new GuardCommand(this);
         if (getCommand("cmdguard") != null) {
@@ -167,15 +173,20 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
                 getLogger().info("LuckPerms recalculation hook active.");
             }
         }
-        if (!updateChecked) {
-            updateChecked = true;
-            try {
-                UpdateChecker.checkAsync(this, getDescription().getVersion(),
-                        loaded.updateChecker(), getLogger());
-            } catch (Exception ex) {
-                getLogger().fine("update check failed: " + ex.getMessage());
-            }
+        // Notify-only GitHub check: async with a 6h in-memory cooldown, so
+        // reloads cannot hammer GitHub; inert entirely when disabled.
+        try {
+            updateChecker.checkAsync(this, getDescription().getVersion(),
+                    loaded.updates(), getLogger());
+        } catch (Exception ex) {
+            getLogger().fine("update check failed: " + ex.getMessage());
         }
+    }
+
+    /** Live update-notification settings for listeners (never null). */
+    private UpdateConfig liveUpdateConfig() {
+        GuardConfig current = config;
+        return current == null ? UpdateConfig.defaults() : current.updates();
     }
 
     /** Returns the current config, may be null before first reload. */

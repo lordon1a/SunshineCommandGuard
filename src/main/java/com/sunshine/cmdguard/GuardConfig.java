@@ -21,7 +21,7 @@ public final class GuardConfig {
     private final AntiEnumerationConfig antiEnumeration;
     private final boolean permissionSync;
     private final MonitoringConfig monitoring;
-    private final UpdateCheckerConfig updateChecker;
+    private final UpdateConfig updates;
     private final Map<String, GroupDef> groups;
     private final List<String> warnings;
 
@@ -29,7 +29,7 @@ public final class GuardConfig {
                         PrivacyRule pluginsCommand, PrivacyRule helpCommand,
                         AntiEnumerationConfig antiEnumeration,
                         boolean permissionSync, MonitoringConfig monitoring,
-                        UpdateCheckerConfig updateChecker,
+                        UpdateConfig updates,
                         Map<String, GroupDef> groups, List<String> warnings) {
         this.enabled = enabled;
         this.bypassPermission = bypassPermission;
@@ -38,7 +38,7 @@ public final class GuardConfig {
         this.antiEnumeration = antiEnumeration;
         this.permissionSync = permissionSync;
         this.monitoring = monitoring;
-        this.updateChecker = updateChecker;
+        this.updates = updates;
         this.groups = Collections.unmodifiableMap(new LinkedHashMap<>(groups));
         this.warnings = Collections.unmodifiableList(new ArrayList<>(warnings));
     }
@@ -78,9 +78,9 @@ public final class GuardConfig {
         return monitoring;
     }
 
-    /** Returns update-checker settings. */
-    public UpdateCheckerConfig updateChecker() {
-        return updateChecker;
+    /** Returns update-notification settings. */
+    public UpdateConfig updates() {
+        return updates;
     }
 
     /** Returns groups keyed by lower-cased name. */
@@ -103,7 +103,7 @@ public final class GuardConfig {
             warnings.add("no 'default' group defined; filtering disabled");
             return new GuardConfig(false, defaultBypass, emptyPlugins, emptyHelp,
                     AntiEnumerationConfig.defaults(),
-                    false, MonitoringConfig.disabled(), UpdateCheckerConfig.defaults(),
+                    false, MonitoringConfig.disabled(), UpdateConfig.defaults(),
                     Map.of(), warnings);
         }
 
@@ -119,11 +119,11 @@ public final class GuardConfig {
         AntiEnumerationConfig antiEnumeration = readAntiEnumeration(cfg, warnings);
         boolean permissionSync = cfg.getBoolean("permission-sync", false);
         MonitoringConfig monitoring = readMonitoring(cfg);
-        UpdateCheckerConfig updateChecker = readUpdateChecker(cfg);
+        UpdateConfig updates = readUpdates(cfg);
 
         Set<String> allowedTop = Set.of("enabled", "bypass-permission", "privacy",
                 "anti-enumeration", "groups",
-                "permission-sync", "monitoring", "update-checker");
+                "permission-sync", "monitoring", "updates");
         for (String key : cfg.getKeys(false)) {
             if (!allowedTop.contains(key)) {
                 warnings.add("unknown config key: " + key);
@@ -187,7 +187,7 @@ public final class GuardConfig {
 
         return new GuardConfig(enabled, bypass, pluginsCommand, helpCommand,
                 antiEnumeration,
-                permissionSync, monitoring, updateChecker, groups, warnings);
+                permissionSync, monitoring, updates, groups, warnings);
     }
 
     /** Reads anti-enumeration settings with secure defaults for old configs. */
@@ -234,14 +234,12 @@ public final class GuardConfig {
         return new MonitoringConfig(logBlocked, notifyStaff, notifyPermission, cooldown);
     }
 
-    /** Reads the update-checker section (enabled, but inert without a Modrinth id). */
-    private static UpdateCheckerConfig readUpdateChecker(FileConfiguration cfg) {
-        boolean enabled = cfg.getBoolean("update-checker.enabled", true);
-        String modrinthId = cfg.getString("update-checker.modrinth-id", "");
-        if (modrinthId == null) {
-            modrinthId = "";
-        }
-        return new UpdateCheckerConfig(enabled, modrinthId.trim());
+    /** Reads the update-notification section (notify-only; all on by default). */
+    private static UpdateConfig readUpdates(FileConfiguration cfg) {
+        boolean enabled = cfg.getBoolean("updates.enabled", true);
+        boolean notifyConsole = cfg.getBoolean("updates.notify-console", true);
+        boolean notifyAdmins = cfg.getBoolean("updates.notify-admins", true);
+        return new UpdateConfig(enabled, notifyConsole, notifyAdmins);
     }
 
     /** Reads one privacy section with safe defaults. */
