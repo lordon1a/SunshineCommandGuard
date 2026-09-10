@@ -12,7 +12,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.server.TabCompleteEvent;
 
-/** Filters server-side tab completions using cached profiles. */
+/** Filters server-side tab completions using cached profiles and snapshots. */
 public final class TabCompleteListener implements Listener {
 
     private volatile GroupResolver resolver;
@@ -63,6 +63,9 @@ public final class TabCompleteListener implements Listener {
             if (profile == null) {
                 return;
             }
+            // Snapshot read only: the async path must never call
+            // Player#hasPermission or any other unsafe Bukkit state.
+            PermissionSnapshot snapshot = current.snapshotOf(id);
             String buffer = event.getBuffer();
             if (buffer == null) {
                 return;
@@ -104,7 +107,8 @@ public final class TabCompleteListener implements Listener {
                     }
                     if (isGranted(id, toMatch)
                             || (CommandMatcher.matches(profile.visibleRules(), toMatch)
-                            && !syncDenies(current, player, toMatch))) {
+                            && !syncDeniedBySnapshot(config != null && config.permissionSync(),
+                                    current, snapshot, toMatch))) {
                         filtered.add(suggestion);
                     }
                 }
@@ -186,17 +190,34 @@ public final class TabCompleteListener implements Listener {
         }
     }
 
-    /** True when permission-sync hides this command. Fail-open on error. */
-    private boolean syncDenies(GroupResolver current, Player player, String command) {
-        GuardConfig cfg = config;
-        if (cfg == null || !cfg.permissionSync()) {
+    /**
+     * Permission-sync verdict for the asynchronous path. Reads only the
+     * main-thread-captured snapshot plus immutable config — never touches
+     * {@code Player#hasPermission}, which is not guaranteed thread-safe.
+     *
+     * <p>Fallback when no snapshot exists yet: commands that declare a Bukkit
+     * permission are hidden (fail closed on exposure — a security plugin must
+     * not leak gated commands because a cache is cold), while commands with
+     * no registered permission keep the group-list verdict (fail open on
+     * availability, matching sync ABSTAIN semantics).</p>
+     */
+    static boolean syncDeniedBySnapshot(boolean syncOn, GroupResolver current,
+                                        PermissionSnapshot snapshot, String command) {
+        if (!syncOn) {
             return false;
         }
+        String required;
         try {
-            return GroupResolver.evaluateSync(true, current.requiredPermission(command),
-                    player::hasPermission) == GroupResolver.SyncVerdict.DENY;
+            required = current.requiredPermission(command);
         } catch (Exception ex) {
             return false;
         }
+        if (required == null) {
+            return false;
+        }
+        if (snapshot == null) {
+            return true;
+        }
+        return !snapshot.has(required);
     }
 }

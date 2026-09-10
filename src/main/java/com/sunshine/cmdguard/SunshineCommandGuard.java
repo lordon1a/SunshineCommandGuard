@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import org.bukkit.World;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -22,6 +23,7 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
     private volatile boolean filteringSuspended;
     private volatile boolean updateChecked;
     private volatile int lastValidationWarnings;
+    private volatile boolean luckPermsHooked;
 
     private final GrantStore grants = new GrantStore();
     private final SetupWizard setupWizard = new SetupWizard(this);
@@ -42,6 +44,10 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
         getServer().getPluginManager().registerEvents(executionListener, this);
         getServer().getPluginManager().registerEvents(tabCompleteListener, this);
         getServer().getPluginManager().registerEvents(new WorldChangeListener(this), this);
+        getServer().getPluginManager().registerEvents(
+                new QuitListener(this::getRawResolver, executionListener::discard,
+                        setupWizard::cancel, getLogger()),
+                this);
         GuardCommand cmd = new GuardCommand(this);
         if (getCommand("cmdguard") != null) {
             getCommand("cmdguard").setExecutor(cmd);
@@ -141,6 +147,11 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
         }
         for (Player p : getServer().getOnlinePlayers()) {
             try {
+                fresh.rebuildSnapshot(p);
+            } catch (Exception ex) {
+                getLogger().fine("snapshot rebuild failed for " + p.getName());
+            }
+            try {
                 p.updateCommands();
             } catch (Exception ex) {
                 getLogger().warning("updateCommands failed for " + p.getName());
@@ -149,6 +160,13 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
         getLogger().info("SunshineCommandGuard reloaded; groups=" + loaded.groups().size()
                 + " warnings=" + loaded.warnings().size()
                 + " validation=" + lastValidationWarnings);
+        if (!luckPermsHooked) {
+            luckPermsHooked = LuckPermsHook.trySubscribe(
+                    this, this::onLuckPermsPlayerChanged, getLogger());
+            if (luckPermsHooked) {
+                getLogger().info("LuckPerms recalculation hook active.");
+            }
+        }
         if (!updateChecked) {
             updateChecked = true;
             try {
@@ -283,6 +301,7 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
         GroupResolver current = resolver;
         if (current != null) {
             current.invalidate(player.getUniqueId());
+            current.rebuildSnapshot(player);
         }
         try {
             player.updateCommands();
@@ -291,5 +310,43 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
             return false;
         }
         return true;
+    }
+
+    /**
+     * LuckPerms recalculated a user: drop caches on any thread, then rebuild
+     * the profile and snapshot where Bukkit calls are safe.
+     */
+    private void onLuckPermsPlayerChanged(UUID playerId) {
+        if (playerId == null) {
+            return;
+        }
+        GroupResolver current = resolver;
+        if (current != null) {
+            current.invalidate(playerId);
+        }
+        CompatScheduler.runNextTick(this, () -> {
+            Player player;
+            try {
+                player = getServer().getPlayer(playerId);
+            } catch (Exception ex) {
+                return;
+            }
+            if (player == null) {
+                return;
+            }
+            GroupResolver fresh = resolver;
+            if (fresh != null) {
+                try {
+                    fresh.resolve(player);
+                } catch (Exception ex) {
+                    getLogger().fine("post-recalculation resolve failed");
+                }
+            }
+            try {
+                player.updateCommands();
+            } catch (Exception ex) {
+                getLogger().fine("post-recalculation updateCommands failed");
+            }
+        });
     }
 }

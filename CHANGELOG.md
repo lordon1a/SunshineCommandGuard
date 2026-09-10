@@ -2,6 +2,37 @@
 
 All notable changes to SunshineCommandGuard are documented here.
 
+## [1.4.1] - 2026-09-10
+
+Production hardening and cache consistency. No new features, no config format
+changes; existing `config.yml` files load unchanged.
+
+### Fixed
+
+- Async tab-completion no longer touches Bukkit permissions: permission-sync
+  verdicts on the async path now come from a main-thread-captured immutable
+  permission snapshot. A cold snapshot hides gated commands rather than
+  leaking them; commands without a registered permission keep working.
+- LuckPerms group/permission changes apply immediately: user-data
+  recalculation invalidates the affected player's profile and snapshot, then
+  rebuilds them on the main thread. LuckPerms stays optional.
+- Player quit now cleans cached profiles, snapshots, notification throttle
+  entries and wizard sessions. Temporary grants intentionally survive
+  reconnects.
+- A missing `enabled` key now fails safe to disabled (was: enabled).
+- Temporary grants match the exact command token: a grant for `plugins` no
+  longer covers `bukkit:plugins`. Namespace protection stays absolute and
+  still runs before grants.
+- Folia wording corrected: Paper and compatible Paper forks supported; Folia
+  support is not currently guaranteed. No metadata flag was added.
+
+### Verification
+
+- Regression tests for every fix above; full suite green.
+- Clean boot verified on Paper 26.2.
+- The 1.4.0 Sentinel API (`BlockReason`, `CommandGuardBlockedEvent`) is
+  unchanged and contract-tested.
+
 ## [1.4.0] - 2026-09-09
 
 ### Added
@@ -88,6 +119,7 @@ All notable changes to SunshineCommandGuard are documented here.
 - Initial public release.
 
 [1.2.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.2.0
+[1.4.1]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.4.1
 [1.4.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.4.0
 [1.3.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.3.0
 [1.1.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.1.0

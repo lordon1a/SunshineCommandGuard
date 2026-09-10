@@ -31,6 +31,13 @@ public final class SetupWizard {
         this.plugin = plugin;
     }
 
+    /** Drops a player's setup session, e.g. on disconnect. */
+    public void cancel(UUID playerId) {
+        if (playerId != null) {
+            sessions.remove(playerId.toString());
+        }
+    }
+
     /**
      * Handles /cmdguard setup [...]. Always returns true (handled).
      * args[0] is "setup".

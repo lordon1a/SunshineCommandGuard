@@ -23,6 +23,11 @@ public final class GroupResolver {
     private final Logger logger;
     private final Map<UUID, ResolvedProfile> cache = new ConcurrentHashMap<>();
     private final Set<UUID> noGroupWarned = ConcurrentHashMap.newKeySet();
+    /**
+     * Main-thread-captured permission snapshots for the async tab-completion
+     * path. Always refreshed together with the profile cache below.
+     */
+    private final Map<UUID, PermissionSnapshot> snapshots = new ConcurrentHashMap<>();
 
     /** Creates a resolver with config, plugin index and logger. */
     public GroupResolver(GuardConfig config, Map<String, Set<String>> pluginIndex,
@@ -86,22 +91,52 @@ public final class GroupResolver {
             return null;
         }
         cache.put(id, profile);
+        rebuildSnapshot(player);
         return profile;
     }
 
-    /** Drops one player's cached profile. */
+    /** Drops one player's cached profile, snapshot and warnings. */
     public void invalidate(UUID playerId) {
         if (playerId == null) {
             return;
         }
         cache.remove(playerId);
+        snapshots.remove(playerId);
         noGroupWarned.remove(playerId);
     }
 
-    /** Drops every cached profile. */
+    /** Drops every cached profile, snapshot and warning. */
     public void invalidateAll() {
         cache.clear();
+        snapshots.clear();
         noGroupWarned.clear();
+    }
+
+    /**
+     * Captures the permission snapshot for one player. Main thread only:
+     * it calls {@code Player#hasPermission}. Never throws.
+     */
+    public void rebuildSnapshot(Player player) {
+        if (player == null) {
+            return;
+        }
+        try {
+            snapshots.put(player.getUniqueId(), PermissionSnapshot.capture(
+                    player, commandPermissions.values(), System.currentTimeMillis()));
+        } catch (Exception ex) {
+            logger.fine("snapshot rebuild failed: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Returns the cached permission snapshot, or null when none was captured
+     * yet. Async-safe: immutable value behind a concurrent map.
+     */
+    public PermissionSnapshot snapshotOf(UUID playerId) {
+        if (playerId == null) {
+            return null;
+        }
+        return snapshots.get(playerId);
     }
 
     /** Returns a cached profile only; never computes. Async-safe. */

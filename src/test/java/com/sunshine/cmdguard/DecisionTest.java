@@ -80,6 +80,38 @@ final class DecisionTest {
     }
 
     @Test
+    void genericGrantCannotBypassNamespaceProtection() {
+        // GrantStore would only report an exact "plugins" grant for token
+        // "bukkit:plugins" as not-granted; even a granted flag for the wrong
+        // token must not leak through. Here granted=false models the strict
+        // store, and the namespace policy still decides.
+        Decision.Board b = new Decision.Board(null, null, false,
+                null, p -> false, allow("bukkit:plugins"), "bukkit:plugins", false,
+                AntiEnumerationConfig.defaults());
+        assertEquals(Decision.Outcome.DENY_NAMESPACE, Decision.check(b));
+    }
+
+    @Test
+    void explicitNamespacedGrantDoesNotOverrideNamespacePolicy() {
+        // Namespace protection is absolute by product policy: an exact grant
+        // for bukkit:plugins authorizes the token, but the namespace block
+        // still wins while anti-enumeration is enabled.
+        Decision.Board b = new Decision.Board(null, null, false,
+                null, p -> false, allow("bukkit:plugins"), "bukkit:plugins", true,
+                AntiEnumerationConfig.defaults());
+        assertEquals(Decision.Outcome.DENY_NAMESPACE, Decision.check(b));
+    }
+
+    @Test
+    void explicitNamespacedGrantWorksWhenProtectionOff() {
+        AntiEnumerationConfig off = new AntiEnumerationConfig(
+                false, false, false, false, Set.of());
+        Decision.Board b = new Decision.Board(null, null, false,
+                null, p -> false, allow(), "bukkit:plugins", true, off);
+        assertEquals(Decision.Outcome.GRANTED, Decision.check(b));
+    }
+
+    @Test
     void privacyAliasKeepsItsPrivacyVerdict() {
         Decision.Board b = new Decision.Board(privacy("plugins"), null, false,
                 null, p -> false, allow("plugins"), "bukkit:plugins", false,

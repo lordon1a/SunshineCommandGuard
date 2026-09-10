@@ -3,6 +3,7 @@ package com.sunshine.cmdguard;
 import com.sunshine.commandguard.api.BlockReason;
 
 import java.util.Locale;
+import java.util.UUID;
 import java.util.logging.Logger;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -45,6 +46,11 @@ public final class ExecutionListener implements Listener {
     /** Sets the staff notifier (null disables notifications). */
     public void setStaffNotifier(StaffNotifier notifier) {
         this.notifier = notifier;
+    }
+
+    /** Drops per-player notification bookkeeping, e.g. on disconnect. */
+    public void discard(UUID playerId) {
+        throttle.forget(playerId);
     }
 
     /** Blocks commands the player may not run. */

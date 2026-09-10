@@ -129,6 +129,12 @@ class CommandGuardApiContractTest {
     }
 
     @Test
+    void nullDispatcherIsTolerated() {
+        ApiBridge.dispatcher = null;
+        assertDoesNotThrow(() -> ApiBridge.emit(PLAYER_ID, "Notch", "plugins", BlockReason.PRIVACY, "world"));
+    }
+
+    @Test
     void worldMayBeNullWhenUnavailable() {
         collect();
         ApiBridge.emit(PLAYER_ID, "Notch", "plugins", BlockReason.PRIVACY, null);

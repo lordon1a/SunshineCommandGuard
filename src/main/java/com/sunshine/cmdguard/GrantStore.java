@@ -34,7 +34,7 @@ public final class GrantStore {
                 .put(key, expiry);
     }
 
-    /** Returns true when a live grant covers this command (namespace-insensitive). */
+    /** Returns true when a live grant covers exactly this canonical command token. */
     public boolean isGranted(UUID player, String command, long now) {
         if (player == null) {
             return false;
@@ -127,8 +127,15 @@ public final class GrantStore {
     }
 
     /**
-     * Finds the stored key covering a token: exact hit, stripped-namespace hit,
-     * then any stored key whose base name matches. Per-player maps are tiny.
+     * Finds the stored key covering a token: exact canonical match only.
+     * Canonical form is {@link CommandMatcher#normalize} output — lower-cased
+     * with arguments stripped and the namespace <b>preserved</b>, so
+     * {@code plugins}, {@code bukkit:plugins} and {@code minecraft:plugins}
+     * are three distinct grant targets. A grant for {@code plugins} never
+     * authorizes {@code bukkit:plugins}: namespaces are security-relevant and
+     * the anti-enumeration namespace policy stays absolute (it runs before
+     * grants in {@link Decision} and an exact namespaced grant does not
+     * override it either). Per-player maps are tiny; a single lookup suffices.
      */
     private static String matchKey(ConcurrentHashMap<String, Long> per, String token) {
         if (token == null || token.isEmpty()) {
@@ -136,19 +143,6 @@ public final class GrantStore {
         }
         if (per.containsKey(token)) {
             return token;
-        }
-        String stripped = CommandMatcher.stripNamespace(token);
-        if (per.containsKey(stripped)) {
-            return stripped;
-        }
-        for (String key : per.keySet()) {
-            if (key == null) {
-                continue;
-            }
-            if (CommandMatcher.stripNamespace(key).equals(token)
-                    || CommandMatcher.stripNamespace(key).equals(stripped)) {
-                return key;
-            }
         }
         return null;
     }

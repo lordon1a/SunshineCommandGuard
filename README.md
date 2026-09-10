@@ -66,12 +66,13 @@ closes both doors without touching a single permission node you already have in 
   so players automatically lose commands their rank can't run, with zero list maintenance.
 - **Temporary grants** — `/cmdguard grant <player> <command> <10m|2h|1d>` opens one command for
   a limited time (events, support cases), `/cmdguard ungrant` takes it back. No config edits.
+  Grants match the exact command token: a grant for `plugins` does not cover `bukkit:plugins`.
 - **Per-world groups** — restrict any group to specific worlds (`worlds: [arena]`), with the
   profile refreshing automatically on world change.
 - **Block monitoring** — log every blocked attempt and/or ping online staff (throttled), so
   reconnaissance attempts don't go unnoticed.
-- **Update checker + Folia support** — console notice when a new release is on Modrinth, and
-  the same jar runs on Folia.
+- **Update checker** — console notice when a new release is on Modrinth, once you set
+  `update-checker.modrinth-id` (empty by default, so no check runs out of the box).
 - **bStats metrics** included, relocated so it never conflicts with another plugin's copy.
 
 ## Screenshots
@@ -94,7 +95,7 @@ privacy messages are that server's own text, fully customizable in `config.yml`.
 
 ## Installation
 
-1. Drop `SunshineCommandGuard-1.4.0.jar` into your `plugins/` folder and start the server once
+1. Drop `SunshineCommandGuard-1.4.1.jar` into your `plugins/` folder and start the server once
    (this creates the default `config.yml`).
 2. Run `/cmdguard setup` in-game and answer three questions — or run `/cmdguard generate`
    and copy the useful parts of `config.generated.yml` into `config.yml`.
@@ -264,7 +265,7 @@ namespaced labels (`essentials:heal`) also match their base name (`heal`). `!ent
 always wins over any allow), `regex:<pattern>` allows full-match patterns, `plugin:<Name>`
 expands to every command that plugin registers. `hidden` entries are runnable but never
 suggested in tab-complete — use them for aliases you don't want advertised. When
-When `anti-enumeration.hide-namespaced-commands` is enabled, namespaced labels are hidden from
+`anti-enumeration.hide-namespaced-commands` is enabled, namespaced labels are hidden from
 the command tree and tab completion. When `anti-enumeration.block-namespaced-execution` is
 enabled, direct execution is also blocked unless the namespace is listed in `namespace-allowlist`.
 
@@ -354,10 +355,10 @@ player resolves to the `default` group.
 
 ## Compatibility
 
-Built against the **Paper 1.21.4 API (Java 21)**. Tested on a clean Paper 26.2 server (v1.4.0:
-clean enable, validator flags unregistered template entries). The same jar
-runs on **Folia**. Older/newer server versions are untested — please open an issue with what
-works or doesn't on your setup.
+Built against the **Paper 1.21.4 API (Java 21)**. Tested on a clean Paper 26.2 server.
+Paper and compatible Paper forks supported. Folia support is not currently guaranteed:
+the plugin targets the Bukkit scheduler and main-thread player APIs. Older/newer server
+versions are untested — please open an issue with what works or doesn't on your setup.
 
 ## Developer API (1.4.0+)
 
@@ -377,7 +378,7 @@ CommandGuard fires a public monitoring event for integrations such as
 ## Building from source
 
 ```powershell
-.\gradlew.bat build   # needs JDK 21, output: build/libs/SunshineCommandGuard-1.4.0.jar
+.\gradlew.bat build   # needs JDK 21, output: build/libs/SunshineCommandGuard-1.4.1.jar
 .\gradlew.bat test    # unit tests (JUnit 5)
 ```
 

@@ -105,4 +105,30 @@ final class GuardConfigSchemaTest {
         GuardConfig cfg = load(BASE + "nonsense-key: 1\n");
         assertEquals(1, cfg.warnings().size());
     }
+
+    @Test
+    void enabledTrueStaysEnabled() {
+        GuardConfig cfg = load("enabled: true\n"
+                + "groups:\n"
+                + "  default:\n"
+                + "    commands: [help]\n");
+        assertTrue(cfg.enabled());
+    }
+
+    @Test
+    void enabledFalseStaysDisabled() {
+        GuardConfig cfg = load("enabled: false\n"
+                + "groups:\n"
+                + "  default:\n"
+                + "    commands: [help]\n");
+        assertFalse(cfg.enabled());
+    }
+
+    @Test
+    void missingEnabledFailsSafeToDisabled() {
+        GuardConfig cfg = load("groups:\n"
+                + "  default:\n"
+                + "    commands: [help]\n");
+        assertFalse(cfg.enabled(), "a missing master switch must never enable filtering");
+    }
 }

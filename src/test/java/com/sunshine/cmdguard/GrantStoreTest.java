@@ -26,11 +26,34 @@ final class GrantStoreTest {
     }
 
     @Test
-    void namespaceInsensitive() {
+    void rootGrantDoesNotImplyNamespacedGrant() {
         long now = 5_000L;
-        store.grant(player, "essentials:heal", 60_000L, now);
-        assertTrue(store.isGranted(player, "heal", now + 1_000L));
-        assertTrue(store.isGranted(player, "essentials:heal", now + 1_000L));
+        store.grant(player, "plugins", 60_000L, now);
+        assertTrue(store.isGranted(player, "/plugins", now + 1_000L), "normal root");
+        assertFalse(store.isGranted(player, "/bukkit:plugins", now + 1_000L),
+                "namespaces are distinct grant targets");
+        assertFalse(store.isGranted(player, "/minecraft:plugins", now + 1_000L),
+                "namespaces are distinct grant targets");
+    }
+
+    @Test
+    void explicitNamespacedGrantMatchesExactly() {
+        long now = 5_000L;
+        store.grant(player, "bukkit:plugins", 60_000L, now);
+        assertTrue(store.isGranted(player, "/bukkit:plugins", now + 1_000L));
+        assertTrue(store.isGranted(player, "/BUKKIT:Plugins", now + 1_000L),
+                "canonical form is lower-cased");
+        assertFalse(store.isGranted(player, "/plugins", now + 1_000L),
+                "explicit namespaced grant does not leak to the root");
+        assertFalse(store.isGranted(player, "/minecraft:plugins", now + 1_000L));
+    }
+
+    @Test
+    void grantMatchingIgnoresArguments() {
+        long now = 5_000L;
+        store.grant(player, "msg", 60_000L, now);
+        assertTrue(store.isGranted(player, "/msg bob hello there", now + 1_000L),
+                "arguments never participate in grant matching");
     }
 
     @Test

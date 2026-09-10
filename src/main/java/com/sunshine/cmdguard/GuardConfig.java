@@ -107,7 +107,8 @@ public final class GuardConfig {
                     Map.of(), warnings);
         }
 
-        boolean enabled = cfg.getBoolean("enabled", true);
+        // Fail-safe default: a missing master switch means disabled, never enabled.
+        boolean enabled = cfg.getBoolean("enabled", false);
         String bypass = cfg.getString("bypass-permission", defaultBypass);
         if (bypass == null || bypass.trim().isEmpty()) {
             bypass = defaultBypass;
