@@ -119,6 +119,18 @@ public final class TabCompleteListener implements Listener {
             if (first.isEmpty()) {
                 return;
             }
+            // Argument completions are only served for commands the player may
+            // actually run: a blocked command must not leak its sub-commands or
+            // argument values through the asynchronous completion path.
+            // Hidden-but-runnable aliases stay eligible, exactly like grants.
+            boolean rootRunnable = isGranted(id, first)
+                    || (CommandMatcher.matches(profile.rules(), first)
+                    && !syncDeniedBySnapshot(config != null && config.permissionSync(),
+                            current, snapshot, first));
+            if (!rootRunnable || (anti != null && anti.hidesNamespacedCommand(first))) {
+                event.setCompletions(List.of());
+                return;
+            }
             CommandMatcher.Rules argRule = profile.argRules().get(first);
             if (argRule == null) {
                 argRule = profile.argRules().get(CommandMatcher.stripNamespace(first));

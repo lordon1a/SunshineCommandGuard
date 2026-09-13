@@ -2,6 +2,23 @@
 
 All notable changes to SunshineCommandGuard are documented here.
 
+## [1.4.2] - 2026-09-13
+
+Bugfix release.
+
+### Fixed
+
+- Tab-completion no longer leaks argument suggestions for commands that are
+  blocked for the player: the asynchronous path now requires the command root
+  to be runnable (visible command, hidden-but-runnable alias, or temporary
+  grant) before serving argument completions. Hidden aliases keep their
+  configured argument completion; blocked commands return none.
+
+### Verification
+
+- Regression test covering blocked commands and hidden aliases; full suite green.
+- Clean build verified with Java 21.
+
 ## [1.4.1] - 2026-09-10
 
 Production hardening and cache consistency, plus notify-only update
@@ -127,6 +144,7 @@ reports one unknown-key warning).
 - Initial public release.
 
 [1.2.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.2.0
+[1.4.2]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.4.2
 [1.4.1]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.4.1
 [1.4.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.4.0
 [1.3.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.3.0

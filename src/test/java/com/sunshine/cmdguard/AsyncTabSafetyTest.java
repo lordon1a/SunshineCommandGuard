@@ -153,4 +153,37 @@ final class AsyncTabSafetyTest {
         assertEquals(List.of("/fly", "/heal"), allowed.getCompletions(),
                 "flipping only cached state flips filtering");
     }
+
+    @Test
+    void blockedCommandsDoNotLeakArgumentCompletions() {
+        YamlConfiguration cfg = new YamlConfiguration();
+        cfg.set("enabled", true);
+        cfg.set("groups.default.commands", List.of("menu"));
+        cfg.set("groups.default.hidden", List.of("ecraft"));
+        cfg.set("groups.default.args.secret.allow", List.of("reveal"));
+        cfg.set("groups.default.args.ecraft.allow", List.of("list"));
+        GuardConfig guard = GuardConfig.load(cfg);
+        GroupResolver resolver = new GroupResolver(guard, Map.of(), Map.of(), LOG);
+
+        Player player = FakePlayers.player(new FakePlayers.Script());
+        assertNotNull(resolver.resolve(player), "warms profile");
+        TabCompleteListener listener = new TabCompleteListener(resolver, LOG);
+        listener.setConfig(guard);
+
+        com.destroystokyo.paper.event.server.AsyncTabCompleteEvent blocked =
+                new com.destroystokyo.paper.event.server.AsyncTabCompleteEvent(
+                        player, new java.util.ArrayList<>(List.of("reveal", "other")),
+                        "/secret re", true, null);
+        listener.onTabComplete(blocked);
+        assertEquals(List.of(), blocked.getCompletions(),
+                "blocked command must not leak argument completions");
+
+        com.destroystokyo.paper.event.server.AsyncTabCompleteEvent hidden =
+                new com.destroystokyo.paper.event.server.AsyncTabCompleteEvent(
+                        player, new java.util.ArrayList<>(List.of("list", "other")),
+                        "/ecraft l", true, null);
+        listener.onTabComplete(hidden);
+        assertEquals(List.of("list"), hidden.getCompletions(),
+                "hidden-but-runnable aliases keep configured argument completions");
+    }
 }
