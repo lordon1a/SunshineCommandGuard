@@ -2,6 +2,21 @@
 
 All notable changes to SunshineCommandGuard are documented here.
 
+## [1.4.3] - 2026-09-15
+
+Tab-completion consistency fix.
+
+### Fixed
+
+- `/cmdguard grant` duration tab-completion now suggests the documented preset
+  `2h` instead of `1h`, matching the command help and README
+  (`30s`, `10m`, `2h`, `1d`). Every suggested value was already accepted by the
+  duration parser; only the suggestion list was inconsistent.
+
+### Verification
+
+- Regression test asserting the completion preset list; full suite green.
+
 ## [1.4.2] - 2026-09-13
 
 Bugfix release.
@@ -144,6 +159,7 @@ reports one unknown-key warning).
 - Initial public release.
 
 [1.2.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.2.0
+[1.4.3]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.4.3
 [1.4.2]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.4.2
 [1.4.1]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.4.1
 [1.4.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.4.0

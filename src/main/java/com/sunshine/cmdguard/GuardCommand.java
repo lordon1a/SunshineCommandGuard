@@ -389,7 +389,7 @@ public final class GuardCommand implements TabExecutor {
         if (args.length == 4 && args[0].equalsIgnoreCase("grant")) {
             String prefix = args[3].toLowerCase(java.util.Locale.ROOT);
             List<String> out = new ArrayList<>();
-            for (String s : Arrays.asList("30s", "10m", "1h", "1d")) {
+            for (String s : Arrays.asList("30s", "10m", "2h", "1d")) {
                 if (s.startsWith(prefix)) {
                     out.add(s);
                 }
