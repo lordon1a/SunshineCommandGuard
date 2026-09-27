@@ -114,8 +114,8 @@ public final class GuardConfig {
             bypass = defaultBypass;
         }
 
-        PrivacyRule pluginsCommand = readPrivacy(cfg, "privacy.plugins-command");
-        PrivacyRule helpCommand = readPrivacy(cfg, "privacy.help-command");
+        PrivacyRule pluginsCommand = readPrivacy(cfg, "privacy.plugins-command", warnings);
+        PrivacyRule helpCommand = readPrivacy(cfg, "privacy.help-command", warnings);
         AntiEnumerationConfig antiEnumeration = readAntiEnumeration(cfg, warnings);
         boolean permissionSync = cfg.getBoolean("permission-sync", false);
         MonitoringConfig monitoring = readMonitoring(cfg);
@@ -140,14 +140,14 @@ public final class GuardConfig {
                 String key = groupName.toLowerCase(Locale.ROOT);
                 String base = "groups." + groupName + ".";
                 int priority = cfg.getInt(base + "priority", 0);
-                List<String> inherit = new ArrayList<>(cfg.getStringList(base + "inherit"));
+                List<String> inherit = readStringList(cfg, base + "inherit", warnings);
                 String blocked = cfg.getString(base + "blocked-message", "");
                 if (blocked == null) {
                     blocked = "";
                 }
-                List<String> commands = new ArrayList<>(cfg.getStringList(base + "commands"));
-                List<String> hidden = new ArrayList<>(cfg.getStringList(base + "hidden"));
-                List<String> worlds = new ArrayList<>(cfg.getStringList(base + "worlds"));
+                List<String> commands = readStringList(cfg, base + "commands", warnings);
+                List<String> hidden = readStringList(cfg, base + "hidden", warnings);
+                List<String> worlds = readStringList(cfg, base + "worlds", warnings);
                 Map<String, ArgRule> args = new LinkedHashMap<>();
                 ConfigurationSection argsSec = cfg.getConfigurationSection(base + "args");
                 if (argsSec != null) {
@@ -157,8 +157,8 @@ public final class GuardConfig {
                             continue;
                         }
                         String argBase = base + "args." + cmdName + ".";
-                        List<String> allow = new ArrayList<>(cfg.getStringList(argBase + "allow"));
-                        List<String> deny = new ArrayList<>(cfg.getStringList(argBase + "deny"));
+                        List<String> allow = readStringList(cfg, argBase + "allow", warnings);
+                        List<String> deny = readStringList(cfg, argBase + "deny", warnings);
                         args.put(norm, new ArgRule(
                                 Collections.unmodifiableList(allow),
                                 Collections.unmodifiableList(deny)));
@@ -199,7 +199,7 @@ public final class GuardConfig {
         boolean blockNamespaces = cfg.getBoolean(path + ".block-namespaced-execution", true);
         boolean blockProbes = cfg.getBoolean(path + ".block-completion-probes", true);
         Set<String> allowlist = new LinkedHashSet<>();
-        for (String raw : cfg.getStringList(path + ".namespace-allowlist")) {
+        for (String raw : readStringList(cfg, path + ".namespace-allowlist", warnings)) {
             String value = raw == null ? "" : raw.trim();
             if (value.isEmpty()) {
                 continue;
@@ -243,13 +243,14 @@ public final class GuardConfig {
     }
 
     /** Reads one privacy section with safe defaults. */
-    private static PrivacyRule readPrivacy(FileConfiguration cfg, String path) {
+    private static PrivacyRule readPrivacy(FileConfiguration cfg, String path,
+                                           List<String> warnings) {
         boolean enabled = cfg.getBoolean(path + ".enabled", false);
         String message = cfg.getString(path + ".message", "");
         if (message == null) {
             message = "";
         }
-        List<String> rawAliases = cfg.getStringList(path + ".aliases");
+        List<String> rawAliases = readStringList(cfg, path + ".aliases", warnings);
         Set<String> aliases = new LinkedHashSet<>();
         for (String alias : rawAliases) {
             String n = CommandMatcher.normalize(alias);
@@ -258,5 +259,29 @@ public final class GuardConfig {
             }
         }
         return new PrivacyRule(enabled, message, Collections.unmodifiableSet(aliases));
+    }
+
+    /**
+     * Reads a list of strings, reporting type mistakes instead of silently
+     * turning them into an empty list: a scalar value is accepted as a
+     * one-element list (so players are not left without commands) but still
+     * produces a warning with the full config path. A section where a list is
+     * expected is reported and ignored.
+     */
+    private static List<String> readStringList(FileConfiguration cfg, String path,
+                                               List<String> warnings) {
+        Object raw = cfg.get(path);
+        if (raw == null) {
+            return new ArrayList<>();
+        }
+        if (raw instanceof List<?>) {
+            return new ArrayList<>(cfg.getStringList(path));
+        }
+        warnings.add(path + ": expected a list, found "
+                + (raw instanceof ConfigurationSection ? "a section" : "a single value"));
+        if (raw instanceof ConfigurationSection) {
+            return new ArrayList<>();
+        }
+        return new ArrayList<>(List.of(String.valueOf(raw)));
     }
 }

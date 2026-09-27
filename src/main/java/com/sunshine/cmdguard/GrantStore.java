@@ -156,12 +156,24 @@ public final class GrantStore {
         return per == null ? 0 : per.size();
     }
 
-    /** Drops all expired entries. */
-    public void purgeExpired(long now) {
-        for (var per : grants.values()) {
-            per.entrySet().removeIf(e -> e.getValue() <= now);
+    /**
+     * Drops all expired entries and returns the players whose grant set shrank,
+     * so callers can refresh exactly those command trees. Players without
+     * expired grants are never included.
+     */
+    public Set<UUID> purgeExpired(long now) {
+        Set<UUID> affected = new LinkedHashSet<>();
+        for (var e : grants.entrySet()) {
+            ConcurrentHashMap<String, Long> per = e.getValue();
+            if (per.entrySet().removeIf(x -> x.getValue() <= now)) {
+                affected.add(e.getKey());
+            }
+            if (per.isEmpty()) {
+                grants.remove(e.getKey(), per);
+            }
         }
         grants.entrySet().removeIf(e -> e.getValue().isEmpty());
+        return affected;
     }
 
     /**

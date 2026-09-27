@@ -87,7 +87,7 @@ privacy messages are that server's own text, fully customizable in `config.yml`.
 
 ## Requirements
 
-- Paper (or a Paper fork) **1.21.x**, Java **21**
+- Paper (or a Paper fork) **1.21.x through 26.x**, Java **21** or newer (26.x servers run Java 25)
 - LuckPerms is **optional** (`softdepend`): without it, every player falls back to the
   `default` group.
 - Players with the bypass permission or OP status skip all filtering — always test with a
@@ -95,7 +95,7 @@ privacy messages are that server's own text, fully customizable in `config.yml`.
 
 ## Installation
 
-1. Drop `SunshineCommandGuard-1.4.3.jar` into your `plugins/` folder and start the server once
+1. Drop `SunshineCommandGuard-1.5.0.jar` into your `plugins/` folder and start the server once
    (this creates the default `config.yml`).
 2. Run `/cmdguard setup` in-game and answer three questions — or run `/cmdguard generate`
    and copy the useful parts of `config.generated.yml` into `config.yml`.
@@ -379,7 +379,7 @@ CommandGuard fires a public monitoring event for integrations such as
 ## Building from source
 
 ```powershell
-.\gradlew.bat build   # needs JDK 21, output: build/libs/SunshineCommandGuard-1.4.3.jar
+.\gradlew.bat build   # needs JDK 21, output: build/libs/SunshineCommandGuard-1.5.0.jar
 .\gradlew.bat test    # unit tests (JUnit 5)
 ```
 

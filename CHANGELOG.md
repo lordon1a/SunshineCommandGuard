@@ -2,6 +2,52 @@
 
 All notable changes to SunshineCommandGuard are documented here.
 
+## [1.5.0] - 2026-09-27
+
+Paper 26.x support and a security hardening pass. One jar runs on Paper
+1.21.x through 26.x.
+
+### Added
+
+- Paper 26.x support. The jar is still built against the Paper 1.21.4 API
+  (Java 21); every server API it calls resolves against Paper 26.2.
+- `/execute ... run <command>` is now filtered. The payload after `run`
+  (including nested `execute` chains and the `minecraft:`/`bukkit:` forms) goes
+  through the same group, grant, permission-sync and privacy checks as a direct
+  command, so an allowed `execute` can no longer run a blocked command.
+- Expired temporary grants now refresh the player's command list within about
+  20 seconds, so the command disappears from their client without a relog.
+- Config warning when a list option is written as a single value, e.g.
+  `commands: help`. The value is accepted as a one-item list instead of
+  silently becoming empty, and the warning shows in the reload summary.
+
+### Fixed
+
+- Security: player-controlled text (`{cmd}`, `{player}`) in blocked, privacy and
+  staff-notification messages is no longer parsed as MiniMessage. Previously a
+  blocked command containing tags could inject clickable links or formatting
+  into staff chat. Templates that use placeholders inside tag arguments keep
+  working.
+- Security: the filter now fails closed. An unexpected error while evaluating a
+  command blocks it (and hides it from the command list) instead of allowing
+  it; the error is logged.
+- Tab-completion applies the `/plugins` and `/help` privacy rules to command
+  suggestions, matching the command list sent to the client.
+- Tab-completion no longer returns unfiltered suggestions in the short window
+  after `/cmdguard reload` or `refresh` while profiles are being rebuilt.
+  Enumeration probes are cancelled before that check. OP and bypass players
+  keep full completions.
+- A block can no longer be undone by another plugin un-cancelling the command
+  event at a later priority.
+- The update notifier validates release links by host and path, not by string
+  prefix.
+
+### Changed
+
+- Reads the plugin version through `getPluginMeta()` instead of the deprecated
+  `getDescription()`. A server API mismatch while indexing plugin commands is
+  logged as SEVERE instead of silently leaving `plugin:` entries empty.
+
 ## [1.4.3] - 2026-09-15
 
 Tab-completion consistency fix.

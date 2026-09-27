@@ -47,6 +47,10 @@ public final class PluginCommandIndex {
             Map<String, Map<String, Object>> commands;
             try {
                 commands = plugin.getDescription().getCommands();
+            } catch (LinkageError ex) {
+                // Legacy getDescription API missing on a future/renamed
+                // platform: skip this plugin instead of failing the whole index.
+                continue;
             } catch (Exception ex) {
                 continue;
             }

@@ -50,7 +50,11 @@ public final class Decision {
 
     private Decision() {}
 
-    /** Runs the execution chain. Never throws: unexpected failures resolve to allow (fail-open). */
+    /**
+     * Runs the execution chain. Never throws: unexpected failures resolve to
+     * {@link Outcome#DENY_LIST} (fail-closed) — a security filter must not
+     * silently allow a command because its own evaluation broke.
+     */
     public static Outcome check(Board b) {
         return checkInternal(b, true);
     }
@@ -86,7 +90,7 @@ public final class Decision {
             }
             return Outcome.DENY_LIST;
         } catch (Exception ex) {
-            return Outcome.ALLOW;
+            return Outcome.DENY_LIST;
         }
     }
 

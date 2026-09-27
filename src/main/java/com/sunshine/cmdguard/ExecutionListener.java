@@ -2,8 +2,13 @@ package com.sunshine.cmdguard;
 
 import com.sunshine.commandguard.api.BlockReason;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
+import java.util.WeakHashMap;
 import java.util.logging.Logger;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -14,12 +19,24 @@ import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 /** Blocks hidden commands and handles privacy aliases. */
 public final class ExecutionListener implements Listener {
 
+    /** Roots whose payload after {@code run} is itself a command to filter. */
+    private static final Set<String> EXECUTE_ROOTS =
+            Set.of("execute", "minecraft:execute", "bukkit:execute");
+
     private volatile GuardConfig config;
     private volatile GroupResolver resolver;
     private volatile GrantStore grants;
     private volatile StaffNotifier notifier;
     private final NotifyThrottle throttle = new NotifyThrottle();
     private final Logger logger;
+    /**
+     * Events denied here, held by weak reference. Lets the HIGHEST-priority
+     * handler re-assert the deny if a later plugin un-cancels the event.
+     */
+    private final Set<PlayerCommandPreprocessEvent> deniedEvents =
+            Collections.synchronizedSet(
+                    Collections.newSetFromMap(
+                            new WeakHashMap<PlayerCommandPreprocessEvent, Boolean>()));
 
     /** Creates a listener with config, resolver and logger. */
     public ExecutionListener(GuardConfig config, GroupResolver resolver, Logger logger) {
@@ -76,36 +93,33 @@ public final class ExecutionListener implements Listener {
         if (profile == null) {
             return;
         }
-        GrantStore grantStore = grants;
-        boolean granted = false;
-        if (grantStore != null) {
-            try {
-                granted = grantStore.isGranted(player.getUniqueId(), token,
-                        System.currentTimeMillis());
-            } catch (Exception ex) {
-                logger.fine("grant check failed: " + ex.getMessage());
+        Decision.Outcome verdict = evaluate(token, currentConfig, currentResolver, profile, player);
+        if (verdict == Decision.Outcome.ALLOW || verdict == Decision.Outcome.GRANTED) {
+            // /execute (and its namespaced forms) must not smuggle a blocked
+            // command past the group list: every nested payload after a
+            // standalone "run" keyword goes through the same Decision, and a
+            // denied payload blocks the outer command exactly like a direct
+            // denial would.
+            for (String inner : innerExecutedTokens(event.getMessage())) {
+                Decision.Outcome innerVerdict =
+                        evaluate(inner, currentConfig, currentResolver, profile, player);
+                if (innerVerdict != Decision.Outcome.ALLOW
+                        && innerVerdict != Decision.Outcome.GRANTED) {
+                    token = inner;
+                    verdict = innerVerdict;
+                    break;
+                }
             }
         }
-        PrivacyRule pluginsRule = currentConfig.pluginsCommand();
-        PrivacyRule helpRule = currentConfig.helpCommand();
-        AntiEnumerationConfig anti = currentConfig.antiEnumeration();
-        String required;
-        try {
-            required = currentResolver.requiredPermission(token);
-        } catch (Exception ex) {
-            required = null;
-        }
-        Decision.Outcome verdict = Decision.check(new Decision.Board(
-                pluginsRule, helpRule, currentConfig.permissionSync(), required,
-                player::hasPermission, profile.rules(), token, granted, anti));
         switch (verdict) {
             case ALLOW, GRANTED -> {
                 return;
             }
             case DENY_PRIVACY -> {
                 event.setCancelled(true);
-                PrivacyRule hit = Decision.privacyBlocks(pluginsRule, token)
-                        ? pluginsRule : helpRule;
+                deniedEvents.add(event);
+                PrivacyRule hit = Decision.privacyBlocks(currentConfig.pluginsCommand(), token)
+                        ? currentConfig.pluginsCommand() : currentConfig.helpCommand();
                 String privacyMessage = hit == null ? "" : hit.message();
                 sendPrivacyMessage(player, privacyMessage, profile.blockedMessage(), token);
                 reportBlocked(player, token, ApiBridge.reasonOf(Decision.Outcome.DENY_PRIVACY));
@@ -113,6 +127,7 @@ public final class ExecutionListener implements Listener {
             }
             case DENY_NAMESPACE, DENY_SYNC, DENY_LIST -> {
                 event.setCancelled(true);
+                deniedEvents.add(event);
                 String blocked = profile.blockedMessage();
                 if (blocked != null && !blocked.isEmpty()) {
                     try {
@@ -125,6 +140,104 @@ public final class ExecutionListener implements Listener {
                 return;
             }
         }
+    }
+
+    /**
+     * Runs after every other plugin: when this listener denied an event and
+     * something un-cancelled it afterwards, the deny is re-asserted. The
+     * filter stays fail-closed regardless of plugin order.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
+    public void onPreprocessUncancelGuard(PlayerCommandPreprocessEvent event) {
+        if (!deniedEvents.remove(event)) {
+            return;
+        }
+        if (!event.isCancelled()) {
+            event.setCancelled(true);
+        }
+    }
+
+    /** One Decision pass for one token, with live grant and permission lookups. */
+    private Decision.Outcome evaluate(String token, GuardConfig cfg,
+                                      GroupResolver currentResolver,
+                                      ResolvedProfile profile, Player player) {
+        boolean granted = false;
+        GrantStore grantStore = grants;
+        if (grantStore != null) {
+            try {
+                granted = grantStore.isGranted(player.getUniqueId(), token,
+                        System.currentTimeMillis());
+            } catch (Exception ex) {
+                logger.fine("grant check failed: " + ex.getMessage());
+            }
+        }
+        String required;
+        try {
+            required = currentResolver.requiredPermission(token);
+        } catch (Exception ex) {
+            required = null;
+        }
+        return Decision.check(new Decision.Board(
+                cfg.pluginsCommand(), cfg.helpCommand(), cfg.permissionSync(), required,
+                player::hasPermission, profile.rules(), token, granted, cfg.antiEnumeration()));
+    }
+
+    /**
+     * Command tokens an {@code /execute ... run <command>} message would run,
+     * with nested {@code execute} payloads unwrapped recursively. Pure logic
+     * (no Bukkit state), exposed for testing. Empty for anything that is not
+     * an execute command or has no payload.
+     */
+    static List<String> innerExecutedTokens(String message) {
+        List<String> out = new ArrayList<>();
+        String current = message;
+        while (current != null) {
+            if (!EXECUTE_ROOTS.contains(CommandMatcher.normalize(current))) {
+                break;
+            }
+            String inner = afterFirstRun(current);
+            if (inner == null) {
+                break;
+            }
+            String token = CommandMatcher.normalize(inner);
+            if (token.isEmpty()) {
+                break;
+            }
+            out.add(token);
+            current = inner;
+        }
+        return out;
+    }
+
+    /**
+     * Raw text after the first standalone {@code run} keyword, or null when
+     * the message has no payload. Each call strictly shortens the input, so
+     * the unwrap loop in {@link #innerExecutedTokens(String)} always
+     * terminates.
+     */
+    private static String afterFirstRun(String message) {
+        if (message == null) {
+            return null;
+        }
+        String s = message.trim();
+        if (s.startsWith("/")) {
+            s = s.substring(1);
+        }
+        String[] parts = s.split("\\s+");
+        for (int i = 1; i < parts.length; i++) {
+            if (!"run".equalsIgnoreCase(parts[i])) {
+                continue;
+            }
+            StringBuilder inner = new StringBuilder();
+            for (int j = i + 1; j < parts.length; j++) {
+                if (inner.length() > 0) {
+                    inner.append(' ');
+                }
+                inner.append(parts[j]);
+            }
+            return inner.length() == 0 ? null : inner.toString();
+        }
+        return null;
     }
 
     /**

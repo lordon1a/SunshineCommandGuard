@@ -23,6 +23,11 @@ public final class CompatScheduler {
 
     private CompatScheduler() {}
 
+    /** Cancellable handle for a repeating task on either platform. */
+    public interface TaskHandle {
+        void cancel();
+    }
+
     /** Returns true when running on Folia. Exposed for logging and testing. */
     public static boolean isFolia() {
         return FOLIA;
@@ -35,6 +40,22 @@ public final class CompatScheduler {
         } else {
             plugin.getServer().getScheduler().runTask(plugin, task);
         }
+    }
+
+    /**
+     * Runs on a fixed period: global region on Folia, main thread otherwise.
+     * The returned handle cancels the task (e.g. from {@code onDisable}).
+     */
+    public static TaskHandle runRepeating(JavaPlugin plugin, Runnable task,
+                                          long delayTicks, long periodTicks) {
+        if (FOLIA) {
+            var scheduled = plugin.getServer().getGlobalRegionScheduler()
+                    .runAtFixedRate(plugin, t -> task.run(), delayTicks, periodTicks);
+            return scheduled::cancel;
+        }
+        var bukkitTask = plugin.getServer().getScheduler()
+                .runTaskTimer(plugin, task, delayTicks, periodTicks);
+        return bukkitTask::cancel;
     }
 
     /** Runs asynchronously on both platforms. */

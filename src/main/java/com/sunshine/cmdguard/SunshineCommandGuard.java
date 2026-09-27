@@ -19,6 +19,9 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
     // https://bstats.org/plugin/bukkit/SunshineCommandGuard/33904
     private static final int BSTATS_PLUGIN_ID = 33904;
 
+    /** Expired-grant sweep period: every 20 seconds. */
+    private static final long GRANT_SWEEP_TICKS = 20L * 20L;
+
     private volatile GuardConfig config;
     private volatile GroupResolver resolver;
     private volatile Map<String, Set<String>> pluginIndex;
@@ -34,6 +37,7 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
     private VisibilityListener visibilityListener;
     private ExecutionListener executionListener;
     private TabCompleteListener tabCompleteListener;
+    private volatile CompatScheduler.TaskHandle grantSweepTask;
 
     @Override
     public void onEnable() {
@@ -59,6 +63,8 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
             getCommand("cmdguard").setExecutor(cmd);
             getCommand("cmdguard").setTabCompleter(cmd);
         }
+        grantSweepTask = CompatScheduler.runRepeating(this, this::sweepExpiredGrants,
+                GRANT_SWEEP_TICKS, GRANT_SWEEP_TICKS);
         CompatScheduler.runNextTick(this, this::reload);
         boolean filtering = config != null && config.enabled() && !filteringSuspended;
         getLogger().info("SunshineCommandGuard enabled; filtering=" + filtering);
@@ -66,7 +72,47 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
 
     @Override
     public void onDisable() {
+        CompatScheduler.TaskHandle sweep = grantSweepTask;
+        if (sweep != null) {
+            sweep.cancel();
+            grantSweepTask = null;
+        }
         getLogger().info("SunshineCommandGuard disabled.");
+    }
+
+    /**
+     * Periodic grant sweep: expired grants are purged and every affected
+     * player who is online gets their command tree resent on the main thread.
+     */
+    private void sweepExpiredGrants() {
+        Set<UUID> affected;
+        try {
+            affected = grants.purgeExpired(System.currentTimeMillis());
+        } catch (Exception ex) {
+            getLogger().fine("grant sweep failed: " + ex.getMessage());
+            return;
+        }
+        for (UUID playerId : affected) {
+            CompatScheduler.runNextTick(this, () -> refreshExpiredGrantCommands(playerId));
+        }
+    }
+
+    /** Resends the command tree of one player after their grant expired. */
+    private void refreshExpiredGrantCommands(UUID playerId) {
+        Player player;
+        try {
+            player = getServer().getPlayer(playerId);
+        } catch (Exception ex) {
+            return;
+        }
+        if (player == null) {
+            return;
+        }
+        try {
+            player.updateCommands();
+        } catch (Exception ex) {
+            getLogger().fine("grant expiry updateCommands failed for " + player.getName());
+        }
     }
 
     /** Reloads config, rebuilds the plugin index and clears every cached profile. */
@@ -87,6 +133,11 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
         Map<String, Set<String>> index;
         try {
             index = PluginCommandIndex.build(getServer().getPluginManager());
+        } catch (LinkageError ex) {
+            // Never let an API mismatch degrade silently: 'plugin:' entries
+            // cannot expand against an empty index, so this must be loud.
+            getLogger().severe("plugin index unavailable (server API mismatch): " + ex);
+            index = Map.of();
         } catch (Exception ex) {
             getLogger().warning("plugin index failed: " + ex.getMessage());
             index = Map.of();
@@ -175,11 +226,26 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
         }
         // Notify-only GitHub check: async with a 6h in-memory cooldown, so
         // reloads cannot hammer GitHub; inert entirely when disabled.
+        String version = pluginVersion();
+        if (version != null) {
+            try {
+                updateChecker.checkAsync(this, version, loaded.updates(), getLogger());
+            } catch (Exception ex) {
+                getLogger().fine("update check failed: " + ex.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Plugin version via the non-deprecated {@code getPluginMeta()} API.
+     * Returns null (update check skipped) when the platform cannot supply it.
+     */
+    private String pluginVersion() {
         try {
-            updateChecker.checkAsync(this, getDescription().getVersion(),
-                    loaded.updates(), getLogger());
-        } catch (Exception ex) {
-            getLogger().fine("update check failed: " + ex.getMessage());
+            return getPluginMeta().getVersion();
+        } catch (LinkageError | RuntimeException ex) {
+            getLogger().warning("could not read plugin version: " + ex.getMessage());
+            return null;
         }
     }
 

@@ -53,6 +53,22 @@ public final class TabCompleteListener implements Listener {
             if (current == null) {
                 return;
             }
+            GuardConfig cfg = config;
+            if (cfg == null || !cfg.enabled()) {
+                return;
+            }
+            String buffer = event.getBuffer();
+            if (buffer == null) {
+                return;
+            }
+            // Enumeration probes are cancelled before any cache lookup: an
+            // unresolved or bypassing player must not be able to probe for the
+            // command list either.
+            AntiEnumerationConfig anti = cfg.antiEnumeration();
+            if (event.isCommand() && anti != null && anti.blocksCompletionBuffer(buffer)) {
+                event.setCancelled(true);
+                return;
+            }
             UUID id;
             try {
                 id = player.getUniqueId();
@@ -61,20 +77,18 @@ public final class TabCompleteListener implements Listener {
             }
             ResolvedProfile profile = current.cachedOnly(id);
             if (profile == null) {
+                // No cached profile: OP and bypass players keep the raw server
+                // completions, everyone else fails closed until the main thread
+                // has resolved a profile.
+                if (isBypass(player, cfg)) {
+                    return;
+                }
+                event.setCompletions(List.of());
                 return;
             }
             // Snapshot read only: the async path must never call
             // Player#hasPermission or any other unsafe Bukkit state.
             PermissionSnapshot snapshot = current.snapshotOf(id);
-            String buffer = event.getBuffer();
-            if (buffer == null) {
-                return;
-            }
-            AntiEnumerationConfig anti = config == null ? null : config.antiEnumeration();
-            if (event.isCommand() && anti != null && anti.blocksCompletionBuffer(buffer)) {
-                event.setCancelled(true);
-                return;
-            }
             String stripped = buffer.startsWith("/") ? buffer.substring(1) : buffer;
             List<String> completions = event.getCompletions();
             if (completions == null || completions.isEmpty()) {
@@ -105,9 +119,15 @@ public final class TabCompleteListener implements Listener {
                     if (anti != null && anti.hidesNamespacedCommand(toMatch)) {
                         continue;
                     }
-                    if (isGranted(id, toMatch)
+                    boolean grantedNow = isGranted(id, toMatch);
+                    // Privacy rules hide root suggestions exactly like the
+                    // visibility decision; a live grant still overrides them.
+                    if (!grantedNow && privacyBlocks(cfg, toMatch)) {
+                        continue;
+                    }
+                    if (grantedNow
                             || (CommandMatcher.matches(profile.visibleRules(), toMatch)
-                            && !syncDeniedBySnapshot(config != null && config.permissionSync(),
+                            && !syncDeniedBySnapshot(cfg.permissionSync(),
                                     current, snapshot, toMatch))) {
                         filtered.add(suggestion);
                     }
@@ -125,7 +145,7 @@ public final class TabCompleteListener implements Listener {
             // Hidden-but-runnable aliases stay eligible, exactly like grants.
             boolean rootRunnable = isGranted(id, first)
                     || (CommandMatcher.matches(profile.rules(), first)
-                    && !syncDeniedBySnapshot(config != null && config.permissionSync(),
+                    && !syncDeniedBySnapshot(cfg.permissionSync(),
                             current, snapshot, first));
             if (!rootRunnable || (anti != null && anti.hidesNamespacedCommand(first))) {
                 event.setCompletions(List.of());
@@ -197,6 +217,35 @@ public final class TabCompleteListener implements Listener {
         }
         try {
             return grantStore.isGranted(id, command, System.currentTimeMillis());
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    /**
+     * Privacy rules hide a root suggestion exactly like the visibility
+     * decision does ({@link Decision#privacyBlocks}), including the
+     * namespace-insensitive alias match.
+     */
+    private static boolean privacyBlocks(GuardConfig cfg, String command) {
+        return cfg != null
+                && (Decision.privacyBlocks(cfg.pluginsCommand(), command)
+                || Decision.privacyBlocks(cfg.helpCommand(), command));
+    }
+
+    /**
+     * Bypass lookup for the asynchronous path: OP status or the configured
+     * bypass permission. Any lookup failure counts as "not bypassed", so the
+     * completion list stays filtered (fail closed).
+     */
+    private boolean isBypass(Player player, GuardConfig cfg) {
+        try {
+            if (player.isOp()) {
+                return true;
+            }
+            String permission = cfg == null ? null : cfg.bypassPermission();
+            return permission != null && !permission.trim().isEmpty()
+                    && player.hasPermission(permission);
         } catch (Exception ex) {
             return false;
         }

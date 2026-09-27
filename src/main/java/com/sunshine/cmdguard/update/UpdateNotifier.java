@@ -1,5 +1,6 @@
 package com.sunshine.cmdguard.update;
 
+import java.net.URI;
 import java.util.List;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -42,9 +43,35 @@ public final class UpdateNotifier {
                         "Open SunshineCommandGuard release page", NamedTextColor.GRAY))));
     }
 
-    /** True only for release URLs under the official repository. */
+    /**
+     * True only for release URLs under the official repository. Parsed with
+     * {@link URI} so prefix tricks like
+     * {@code https://github.com/lordon1a/SunshineCommandGuard/releases.evil.example/x}
+     * (or a different scheme, host or port) are rejected outright.
+     */
     public static boolean isOfficialReleaseUrl(String url) {
-        return url != null
-                && url.startsWith("https://github.com/lordon1a/SunshineCommandGuard/releases");
+        if (url == null) {
+            return false;
+        }
+        URI uri;
+        try {
+            uri = URI.create(url);
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
+        if (!"https".equalsIgnoreCase(uri.getScheme())
+                || !"github.com".equalsIgnoreCase(uri.getHost())) {
+            return false;
+        }
+        int port = uri.getPort();
+        if (port != -1 && port != 443) {
+            return false;
+        }
+        String path = uri.getPath();
+        if (path == null) {
+            return false;
+        }
+        return path.equals("/lordon1a/SunshineCommandGuard/releases")
+                || path.startsWith("/lordon1a/SunshineCommandGuard/releases/");
     }
 }

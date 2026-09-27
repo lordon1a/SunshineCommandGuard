@@ -86,8 +86,10 @@ public final class VisibilityListener implements Listener {
                             current.requiredPermission(cmd), player::hasPermission,
                             profile.visibleRules(), cmd, granted.contains(norm), anti));
                     return o != Decision.Outcome.ALLOW && o != Decision.Outcome.GRANTED;
-                } catch (Exception ex) {
-                    return false;
+                } catch (Throwable ex) {
+                    warn("visibility decision failed for '" + cmd
+                            + "'; hiding it (fail closed): " + ex);
+                    return true;
                 }
             });
             // Re-add grants the server didn't send (e.g. filtered upstream).
@@ -107,6 +109,19 @@ public final class VisibilityListener implements Listener {
             logger.warning("command list is immutable, visibility filter skipped");
         } catch (Exception ex) {
             logger.warning("visibility filter failed: " + ex.getMessage());
+        }
+    }
+
+    /** Emits one warning, tolerating a missing or broken logger. */
+    private void warn(String message) {
+        Logger log = logger;
+        if (log == null) {
+            return;
+        }
+        try {
+            log.warning(message);
+        } catch (Exception ignored) {
+            // Logging must never break the filter.
         }
     }
 }
