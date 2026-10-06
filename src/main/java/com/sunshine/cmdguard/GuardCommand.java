@@ -77,7 +77,14 @@ public final class GuardCommand implements TabExecutor {
                     sender.sendMessage("Player offline: " + args[1]);
                     return true;
                 }
-                String input = args[2];
+                StringBuilder inputBuilder = new StringBuilder();
+                for (int i = 2; i < args.length; i++) {
+                    if (inputBuilder.length() > 0) {
+                        inputBuilder.append(' ');
+                    }
+                    inputBuilder.append(args[i]);
+                }
+                String input = inputBuilder.toString();
                 String token = CommandMatcher.normalize(input);
                 String base = CommandMatcher.stripNamespace(token);
                 GuardConfig cfg = plugin.getGuardConfig();
@@ -180,6 +187,13 @@ public final class GuardCommand implements TabExecutor {
                 sender.sendMessage("Reason:        " + reason);
                 sender.sendMessage("RunReason:     " + runReason);
                 sender.sendMessage("BlockedMsg:    " + blockedMsg);
+                String firstArg = ExecutionListener.firstArgument(input);
+                if (firstArg != null && !firstArg.isEmpty()) {
+                    boolean argsAllowed = ExecutionListener.argumentAllowed(profile, token, input);
+                    sender.sendMessage("Args rule:     " + (argsAllowed
+                            ? "allowed"
+                            : "blocked (" + firstArg + ")"));
+                }
                 return true;
             }
             case "debug": {
@@ -594,6 +608,7 @@ public final class GuardCommand implements TabExecutor {
             case DENY_NAMESPACE -> "namespace-protection";
             case DENY_SYNC -> "permission-sync";
             case DENY_LIST -> "group-list";
+            case DENY_ARGS -> "argument-rule";
         };
     }
 

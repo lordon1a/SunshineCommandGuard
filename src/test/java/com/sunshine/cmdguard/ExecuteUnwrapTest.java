@@ -1,6 +1,7 @@
 package com.sunshine.cmdguard;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -62,5 +63,31 @@ final class ExecuteUnwrapTest {
     @Test
     void caseInsensitive() {
         assertEquals(List.of("fly"), ExecutionListener.innerExecutedTokens("/EXECUTE RUN FLY"));
+    }
+
+    @Test
+    void rawInnerPayloadsMirrorInnerTokens() {
+        assertEquals(List.of("gamemode creative"),
+                ExecutionListener.innerExecutedRaw("/execute run gamemode creative"));
+        assertEquals(List.of("minecraft:execute run gamemode creative", "gamemode creative"),
+                ExecutionListener.innerExecutedRaw(
+                        "/execute run minecraft:execute run gamemode creative"));
+        assertEquals(List.of(), ExecutionListener.innerExecutedRaw("/say execute run fly"));
+    }
+
+    @Test
+    void firstArgumentIsNormalized() {
+        assertEquals("creative", ExecutionListener.firstArgument("/gamemode creative"));
+        assertEquals("creative", ExecutionListener.firstArgument("GAMEMODE   CREATIVE"));
+        assertEquals("creative", ExecutionListener.firstArgument(
+                "/minecraft:gamemode creative extra"));
+        assertEquals("creative", ExecutionListener.firstArgument("gamemode creative"));
+    }
+
+    @Test
+    void missingFirstArgumentIsNull() {
+        assertNull(ExecutionListener.firstArgument("/gamemode"));
+        assertNull(ExecutionListener.firstArgument("/gamemode   "));
+        assertNull(ExecutionListener.firstArgument(null));
     }
 }

@@ -45,6 +45,18 @@ final class ExecutionGuardIntegrationTest {
         return GuardConfig.load(cfg);
     }
 
+    private static GuardConfig configWithArgs(boolean includeExecute) {
+        YamlConfiguration cfg = new YamlConfiguration();
+        cfg.set("enabled", true);
+        cfg.set("anti-enumeration.enabled", false);
+        cfg.set("groups.default.commands",
+                includeExecute ? List.of("execute", "gamemode") : List.of("gamemode"));
+        cfg.set("groups.default.blocked-message", "<red>Unknown command.");
+        cfg.set("groups.default.args.gamemode.allow", List.of("survival"));
+        cfg.set("groups.default.args.gamemode.deny", List.of("creative"));
+        return GuardConfig.load(cfg);
+    }
+
     private ExecutionListener listener(GuardConfig cfg) {
         GroupResolver resolver = new GroupResolver(cfg, Map.of(), LOG);
         ExecutionListener listener = new ExecutionListener(cfg, resolver, LOG);
@@ -147,5 +159,97 @@ final class ExecutionGuardIntegrationTest {
 
         listener.onPreprocessUncancelGuard(event);
         assertFalse(event.isCancelled(), "no deny decision = nothing to re-assert");
+    }
+
+    @Test
+    void deniedArgumentBlocksCommand() {
+        ExecutionListener listener = listener(configWithArgs(false));
+        FakePlayers.Script script = new FakePlayers.Script();
+        Player player = FakePlayers.player(script);
+
+        PlayerCommandPreprocessEvent event = event(player, "/gamemode creative");
+        listener.onPreprocess(event);
+
+        assertTrue(event.isCancelled(), "a denied first argument blocks the command");
+        assertEquals(1, fired.size(), "exactly one API event per blocked attempt");
+        assertEquals("gamemode", fired.get(0).getCommandToken());
+        assertEquals(BlockReason.ARGUMENT_RULE, fired.get(0).getReason());
+        assertFalse(script.outbox.isEmpty(), "blocked message is sent");
+    }
+
+    @Test
+    void allowedArgumentPasses() {
+        ExecutionListener listener = listener(configWithArgs(false));
+        Player player = FakePlayers.player(new FakePlayers.Script());
+
+        PlayerCommandPreprocessEvent event = event(player, "/gamemode survival");
+        listener.onPreprocess(event);
+
+        assertFalse(event.isCancelled());
+        assertTrue(fired.isEmpty(), "no API event for an allowed argument");
+    }
+
+    @Test
+    void bareCommandPassesWhenNoArgument() {
+        ExecutionListener listener = listener(configWithArgs(false));
+        Player player = FakePlayers.player(new FakePlayers.Script());
+
+        PlayerCommandPreprocessEvent event = event(player, "/gamemode");
+        listener.onPreprocess(event);
+
+        assertFalse(event.isCancelled(), "bare /gamemode has no argument to check");
+        assertTrue(fired.isEmpty());
+    }
+
+    @Test
+    void namespacedArgumentIsBlocked() {
+        ExecutionListener listener = listener(configWithArgs(false));
+        Player player = FakePlayers.player(new FakePlayers.Script());
+
+        PlayerCommandPreprocessEvent event = event(player, "/minecraft:gamemode creative");
+        listener.onPreprocess(event);
+
+        assertTrue(event.isCancelled());
+        assertEquals(1, fired.size());
+        assertEquals(BlockReason.ARGUMENT_RULE, fired.get(0).getReason());
+    }
+
+    @Test
+    void argumentOutsideAllowListIsBlocked() {
+        ExecutionListener listener = listener(configWithArgs(false));
+        Player player = FakePlayers.player(new FakePlayers.Script());
+
+        PlayerCommandPreprocessEvent event = event(player, "/gamemode adventure");
+        listener.onPreprocess(event);
+
+        assertTrue(event.isCancelled(), "allow list present but argument not in it");
+        assertEquals(BlockReason.ARGUMENT_RULE, fired.get(0).getReason());
+    }
+
+    @Test
+    void executePayloadArgumentIsBlocked() {
+        ExecutionListener listener = listener(configWithArgs(true));
+        Player player = FakePlayers.player(new FakePlayers.Script());
+
+        PlayerCommandPreprocessEvent event = event(player, "/execute run gamemode creative");
+        listener.onPreprocess(event);
+
+        assertTrue(event.isCancelled());
+        assertEquals(1, fired.size());
+        assertEquals("gamemode", fired.get(0).getCommandToken(),
+                "the inner command with the denied argument is reported");
+        assertEquals(BlockReason.ARGUMENT_RULE, fired.get(0).getReason());
+    }
+
+    @Test
+    void commandWithoutArgRuleIsUnaffected() {
+        ExecutionListener listener = listener(config(false, false));
+        Player player = FakePlayers.player(new FakePlayers.Script());
+
+        PlayerCommandPreprocessEvent event = event(player, "/fly creative whatever");
+        listener.onPreprocess(event);
+
+        assertFalse(event.isCancelled(), "no args rule means arguments are never checked");
+        assertTrue(fired.isEmpty());
     }
 }

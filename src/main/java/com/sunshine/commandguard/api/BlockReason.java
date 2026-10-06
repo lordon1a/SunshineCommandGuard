@@ -13,5 +13,10 @@ public enum BlockReason {
     /** A command blocked because the player lacks its synced permission. */
     PERMISSION_SYNC,
     /** A command that is not on the player's visible/runnable list. */
-    GROUP_LIST
+    GROUP_LIST,
+    /**
+     * The command was allowed but its first argument is not permitted by the
+     * group's args rule. Since 2.0.0.
+     */
+    ARGUMENT_RULE
 }

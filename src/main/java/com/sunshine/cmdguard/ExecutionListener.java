@@ -111,18 +111,35 @@ public final class ExecutionListener implements Listener {
         }
         Decision.Outcome verdict = evaluate(token, currentConfig, currentResolver, profile, player);
         if (verdict == Decision.Outcome.ALLOW || verdict == Decision.Outcome.GRANTED) {
+            // The group's args rule is part of the runnable contract, exactly
+            // like it already is for tab completion: an allowed command whose
+            // first argument is not permitted is still blocked.
+            if (!argumentAllowed(profile, token, event.getMessage())) {
+                verdict = Decision.Outcome.DENY_ARGS;
+            }
+        }
+        if (verdict == Decision.Outcome.ALLOW || verdict == Decision.Outcome.GRANTED) {
             // /execute (and its namespaced forms) must not smuggle a blocked
             // command past the group list: every nested payload after a
             // standalone "run" keyword goes through the same Decision, and a
             // denied payload blocks the outer command exactly like a direct
             // denial would.
-            for (String inner : innerExecutedTokens(event.getMessage())) {
+            List<String> innerTokens = innerExecutedTokens(event.getMessage());
+            List<String> innerRaw = innerExecutedRaw(event.getMessage());
+            for (int i = 0; i < innerTokens.size(); i++) {
+                String inner = innerTokens.get(i);
                 Decision.Outcome innerVerdict =
                         evaluate(inner, currentConfig, currentResolver, profile, player);
                 if (innerVerdict != Decision.Outcome.ALLOW
                         && innerVerdict != Decision.Outcome.GRANTED) {
                     token = inner;
                     verdict = innerVerdict;
+                    break;
+                }
+                String raw = i < innerRaw.size() ? innerRaw.get(i) : inner;
+                if (!argumentAllowed(profile, inner, raw)) {
+                    token = inner;
+                    verdict = Decision.Outcome.DENY_ARGS;
                     break;
                 }
             }
@@ -141,7 +158,7 @@ public final class ExecutionListener implements Listener {
                 reportBlocked(player, token, ApiBridge.reasonOf(Decision.Outcome.DENY_PRIVACY));
                 return;
             }
-            case DENY_NAMESPACE, DENY_SYNC, DENY_LIST -> {
+            case DENY_NAMESPACE, DENY_SYNC, DENY_LIST, DENY_ARGS -> {
                 event.setCancelled(true);
                 deniedEvents.add(event);
                 String blocked = profile.blockedMessage();
@@ -254,6 +271,75 @@ public final class ExecutionListener implements Listener {
             return inner.length() == 0 ? null : inner.toString();
         }
         return null;
+    }
+
+    /**
+     * Raw inner payload texts for an {@code /execute ... run <command>} message,
+     * unwrapped recursively. Same sequence as {@link #innerExecutedTokens(String)}
+     * but preserving the full inner text so argument rules can inspect the first
+     * argument. Pure logic, exposed for testing.
+     */
+    static List<String> innerExecutedRaw(String message) {
+        List<String> out = new ArrayList<>();
+        String current = message;
+        while (current != null) {
+            if (!EXECUTE_ROOTS.contains(CommandMatcher.normalize(current))) {
+                break;
+            }
+            String inner = afterFirstRun(current);
+            if (inner == null) {
+                break;
+            }
+            if (CommandMatcher.normalize(inner).isEmpty()) {
+                break;
+            }
+            out.add(inner);
+            current = inner;
+        }
+        return out;
+    }
+
+    /**
+     * The command's first argument, normalized like a command token (leading
+     * slash dropped, whitespace collapsed, lower-case). Null when there is no
+     * argument. Pure logic, exposed for testing.
+     */
+    static String firstArgument(String message) {
+        if (message == null) {
+            return null;
+        }
+        String s = message.trim();
+        if (s.startsWith("/")) {
+            s = s.substring(1);
+        }
+        String[] parts = s.split("\\s+");
+        if (parts.length < 2) {
+            return null;
+        }
+        return CommandMatcher.normalize(parts[1]);
+    }
+
+    /**
+     * Applies the group's args rule for a command root to its first argument,
+     * mirroring {@code TabCompleteListener}: lookup by root then by its
+     * namespace-stripped form; missing rule or missing argument allows.
+     */
+    static boolean argumentAllowed(ResolvedProfile profile, String root, String rawCommand) {
+        if (profile == null || profile.argRules() == null) {
+            return true;
+        }
+        CommandMatcher.Rules argRule = profile.argRules().get(root);
+        if (argRule == null) {
+            argRule = profile.argRules().get(CommandMatcher.stripNamespace(root));
+        }
+        if (argRule == null) {
+            return true;
+        }
+        String firstArg = firstArgument(rawCommand);
+        if (firstArg == null || firstArg.isEmpty()) {
+            return true;
+        }
+        return CommandMatcher.matches(argRule, firstArg);
     }
 
     /**

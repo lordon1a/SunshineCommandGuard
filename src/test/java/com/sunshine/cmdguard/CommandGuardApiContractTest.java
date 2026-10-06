@@ -100,6 +100,7 @@ class CommandGuardApiContractTest {
         assertEquals(BlockReason.NAMESPACE_PROTECTION, ApiBridge.reasonOf(Decision.Outcome.DENY_NAMESPACE));
         assertEquals(BlockReason.PERMISSION_SYNC, ApiBridge.reasonOf(Decision.Outcome.DENY_SYNC));
         assertEquals(BlockReason.GROUP_LIST, ApiBridge.reasonOf(Decision.Outcome.DENY_LIST));
+        assertEquals(BlockReason.ARGUMENT_RULE, ApiBridge.reasonOf(Decision.Outcome.DENY_ARGS));
         assertNull(ApiBridge.reasonOf(Decision.Outcome.ALLOW), "allowed attempts never emit");
         assertNull(ApiBridge.reasonOf(Decision.Outcome.GRANTED), "granted attempts never emit");
         assertNull(ApiBridge.reasonOf(null));

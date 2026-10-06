@@ -29,6 +29,7 @@ final class ApiBridge {
             case DENY_NAMESPACE -> BlockReason.NAMESPACE_PROTECTION;
             case DENY_SYNC -> BlockReason.PERMISSION_SYNC;
             case DENY_LIST -> BlockReason.GROUP_LIST;
+            case DENY_ARGS -> BlockReason.ARGUMENT_RULE;
             case ALLOW, GRANTED -> null;
         };
     }

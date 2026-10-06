@@ -13,7 +13,7 @@ public final class Decision {
 
     /** Why a command was allowed or blocked. */
     public enum Outcome {
-        ALLOW, GRANTED, DENY_PRIVACY, DENY_NAMESPACE, DENY_SYNC, DENY_LIST
+        ALLOW, GRANTED, DENY_PRIVACY, DENY_NAMESPACE, DENY_SYNC, DENY_LIST, DENY_ARGS
     }
 
     /**
