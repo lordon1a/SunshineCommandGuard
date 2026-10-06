@@ -35,4 +35,25 @@ class GuardCommandTabTest {
                 new String[]{"grant", "TestPlayer", "fly", "2"});
         assertEquals(List.of("2h"), out);
     }
+
+    @Test
+    void importSubcommandIsListed() {
+        List<String> out = command().onTabComplete(admin(), null, "cmdguard",
+                new String[]{"im"});
+        assertEquals(List.of("import"), out);
+    }
+
+    @Test
+    void importSourceCompletion() {
+        List<String> out = command().onTabComplete(admin(), null, "cmdguard",
+                new String[]{"import", ""});
+        assertEquals(List.of("commandwhitelist"), out);
+    }
+
+    @Test
+    void importSourceCompletionFiltersByPrefix() {
+        List<String> out = command().onTabComplete(admin(), null, "cmdguard",
+                new String[]{"import", "command"});
+        assertEquals(List.of("commandwhitelist"), out);
+    }
 }

@@ -30,7 +30,7 @@ public final class GuardCommand implements TabExecutor {
             return true;
         }
         if (args.length == 0) {
-            sender.sendMessage("Usage: /cmdguard <reload|refresh|test|debug|dump|generate|grant|ungrant|setup|diagnose>");
+            sender.sendMessage("Usage: /cmdguard <reload|refresh|test|debug|dump|generate|import|grant|ungrant|setup|diagnose>");
             return true;
         }
         String sub = args[0].toLowerCase(java.util.Locale.ROOT);
@@ -226,6 +226,57 @@ public final class GuardCommand implements TabExecutor {
                         + " Review it before copying into config.yml.");
                 return true;
             }
+            case "import": {
+                if (args.length < 2 || !args[1].equalsIgnoreCase("commandwhitelist")) {
+                    sender.sendMessage("Usage: /cmdguard import commandwhitelist");
+                    return true;
+                }
+                File source = new File(
+                        new File(plugin.getDataFolder().getParentFile(), "CommandWhitelist"),
+                        "config.yml");
+                if (!source.isFile()) {
+                    sender.sendMessage("CommandWhitelist config not found at "
+                            + CommandWhitelistImporter.SOURCE_LABEL);
+                    return true;
+                }
+                CommandWhitelistImporter.Result result;
+                try {
+                    YamlConfiguration yml = YamlConfiguration.loadConfiguration(source);
+                    result = CommandWhitelistImporter.importFrom(yml,
+                            java.time.LocalDate.now().toString());
+                } catch (Exception ex) {
+                    plugin.getLogger().warning("import failed: " + ex.getMessage());
+                    sender.sendMessage("Import failed; see server log.");
+                    return true;
+                }
+                try {
+                    File dir = plugin.getDataFolder();
+                    if (!dir.exists() && !dir.mkdirs()) {
+                        plugin.getLogger().warning("import directory not writable");
+                        sender.sendMessage("Import failed; see server log.");
+                        return true;
+                    }
+                    java.nio.file.Files.writeString(
+                            new File(dir, "config.imported.yml").toPath(),
+                            result.yaml(), java.nio.charset.StandardCharsets.UTF_8);
+                } catch (Exception ex) {
+                    plugin.getLogger().warning("config import failed: " + ex.getMessage());
+                    sender.sendMessage("Import failed; see server log.");
+                    return true;
+                }
+                for (String warning : result.warnings()) {
+                    plugin.getLogger().warning("import: " + warning);
+                }
+                sender.sendMessage("Imported " + result.groups() + " groups ("
+                        + result.commands() + " commands, " + result.argRules()
+                        + " argument rules) to config.imported.yml."
+                        + " Review it, then copy what you need into config.yml.");
+                if (!result.warnings().isEmpty()) {
+                    sender.sendMessage(result.warnings().size()
+                            + " warnings; see server log.");
+                }
+                return true;
+            }
             case "grant": {
                 if (args.length < 4) {
                     sender.sendMessage("Usage: /cmdguard grant <player> <command> <duration>");
@@ -313,7 +364,7 @@ public final class GuardCommand implements TabExecutor {
                 return true;
             }
             default: {
-                sender.sendMessage("Usage: /cmdguard <reload|refresh|test|debug|dump|generate|grant|ungrant|setup|diagnose>");
+                sender.sendMessage("Usage: /cmdguard <reload|refresh|test|debug|dump|generate|import|grant|ungrant|setup|diagnose>");
                 return true;
             }
         }
@@ -356,7 +407,7 @@ public final class GuardCommand implements TabExecutor {
         if (args.length == 1) {
             String prefix = args[0].toLowerCase(java.util.Locale.ROOT);
             List<String> subs = Arrays.asList("reload", "refresh", "test", "debug", "dump",
-                    "generate", "grant", "ungrant", "setup", "diagnose");
+                    "generate", "import", "grant", "ungrant", "setup", "diagnose");
             List<String> out = new ArrayList<>();
             for (String s : subs) {
                 if (s.startsWith(prefix)) {
@@ -364,6 +415,9 @@ public final class GuardCommand implements TabExecutor {
                 }
             }
             return out;
+        }
+        if (args.length == 2 && args[0].equalsIgnoreCase("import")) {
+            return completePrefix(args[1], List.of("commandwhitelist"));
         }
         if (args.length == 2 && (args[0].equalsIgnoreCase("refresh")
                 || args[0].equalsIgnoreCase("test")
