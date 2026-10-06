@@ -1,5 +1,8 @@
 package com.sunshine.cmdguard;
 
+import org.bukkit.Bukkit;
+import org.bukkit.Server;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -56,6 +59,37 @@ public final class CompatScheduler {
         var bukkitTask = plugin.getServer().getScheduler()
                 .runTaskTimer(plugin, task, delayTicks, periodTicks);
         return bukkitTask::cancel;
+    }
+
+    /**
+     * Runs a task that touches one player: on the player's region scheduler on
+     * Folia, otherwise inline when already on the main thread (preserving the
+     * pre-Folia behaviour) or on the next tick when off it.
+     */
+    public static void runForPlayer(JavaPlugin plugin, Player player, Runnable task) {
+        if (player == null || task == null) {
+            return;
+        }
+        if (FOLIA) {
+            player.getScheduler().run(plugin, t -> task.run(), null);
+        } else if (isPrimaryThreadSafe()) {
+            task.run();
+        } else {
+            runNextTick(plugin, task);
+        }
+    }
+
+    /**
+     * {@code Bukkit.isPrimaryThread()} but null-server safe: unit tests run
+     * without a server and must be treated as being on the calling thread.
+     */
+    private static boolean isPrimaryThreadSafe() {
+        try {
+            Server server = Bukkit.getServer();
+            return server == null || server.isPrimaryThread();
+        } catch (Throwable ex) {
+            return true;
+        }
     }
 
     /** Runs asynchronously on both platforms. */

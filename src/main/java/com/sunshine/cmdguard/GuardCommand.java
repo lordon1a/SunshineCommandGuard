@@ -58,12 +58,13 @@ public final class GuardCommand implements TabExecutor {
                 if (resolver != null) {
                     resolver.invalidate(target.getUniqueId());
                 }
-                try {
-                    target.updateCommands();
-                } catch (Exception ex) {
-                    sender.sendMessage("Refresh failed for " + target.getName());
-                    return true;
-                }
+                CompatScheduler.runForPlayer(plugin, target, () -> {
+                    try {
+                        target.updateCommands();
+                    } catch (Exception ex) {
+                        sender.sendMessage("Refresh failed for " + target.getName());
+                    }
+                });
                 sender.sendMessage("Refreshed " + target.getName());
                 return true;
             }
@@ -253,11 +254,13 @@ public final class GuardCommand implements TabExecutor {
                 if (resolver != null) {
                     resolver.invalidate(target.getUniqueId());
                 }
-                try {
-                    target.updateCommands();
-                } catch (Exception ex) {
-                    plugin.getLogger().fine("grant updateCommands failed");
-                }
+                CompatScheduler.runForPlayer(plugin, target, () -> {
+                    try {
+                        target.updateCommands();
+                    } catch (Exception ex) {
+                        plugin.getLogger().fine("grant updateCommands failed");
+                    }
+                });
                 sender.sendMessage("Granted " + token + " to " + target.getName()
                         + " for " + args[3] + ".");
                 return true;
@@ -283,11 +286,13 @@ public final class GuardCommand implements TabExecutor {
                 if (resolver != null) {
                     resolver.invalidate(target.getUniqueId());
                 }
-                try {
-                    target.updateCommands();
-                } catch (Exception ex) {
-                    plugin.getLogger().fine("ungrant updateCommands failed");
-                }
+                CompatScheduler.runForPlayer(plugin, target, () -> {
+                    try {
+                        target.updateCommands();
+                    } catch (Exception ex) {
+                        plugin.getLogger().fine("ungrant updateCommands failed");
+                    }
+                });
                 sender.sendMessage(removed ? "Grant revoked for " + target.getName() + "."
                         : "No matching grant for " + target.getName() + ".");
                 return true;
@@ -491,6 +496,7 @@ public final class GuardCommand implements TabExecutor {
                             }
                         }
                     }
+                    resolver.recordVisibleCount(target.getUniqueId(), visibleOf);
                 }
             } catch (Exception ex) {
                 plugin.getLogger().fine("diagnose scan failed: " + ex.getMessage());

@@ -105,6 +105,14 @@ public final class VisibilityListener implements Listener {
                     commands.add(g);
                 }
             }
+            // Feeds %cmdguard_visible%; namespaced duplicates are not counted.
+            int visible = 0;
+            for (String c : commands) {
+                if (c != null && c.indexOf(':') < 0) {
+                    visible++;
+                }
+            }
+            current.recordVisibleCount(player.getUniqueId(), visible);
         } catch (UnsupportedOperationException ex) {
             logger.warning("command list is immutable, visibility filter skipped");
         } catch (Exception ex) {

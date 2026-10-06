@@ -28,7 +28,13 @@ public final class WorldChangeListener implements Listener {
             if (resolver != null) {
                 resolver.invalidate(player.getUniqueId());
             }
-            player.updateCommands();
+            CompatScheduler.runForPlayer(plugin, player, () -> {
+                try {
+                    player.updateCommands();
+                } catch (Exception ex) {
+                    logger.fine("world-change refresh failed: " + ex.getMessage());
+                }
+            });
         } catch (Exception ex) {
             logger.fine("world-change refresh failed: " + ex.getMessage());
         }
