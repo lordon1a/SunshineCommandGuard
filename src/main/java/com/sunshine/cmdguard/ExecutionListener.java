@@ -27,6 +27,7 @@ public final class ExecutionListener implements Listener {
     private volatile GroupResolver resolver;
     private volatile GrantStore grants;
     private volatile StaffNotifier notifier;
+    private volatile DiscordWebhook discord;
     private final NotifyThrottle throttle = new NotifyThrottle();
     private final Logger logger;
     /**
@@ -48,6 +49,17 @@ public final class ExecutionListener implements Listener {
     /** Updates the config after reload. */
     public void setConfig(GuardConfig config) {
         this.config = config;
+        rebuildDiscord(config);
+    }
+
+    /** Rebuilds the Discord notifier from the loaded monitoring settings. */
+    private void rebuildDiscord(GuardConfig cfg) {
+        MonitoringConfig mon = cfg == null ? null : cfg.monitoring();
+        if (mon == null || !mon.discordEnabled()) {
+            discord = null;
+            return;
+        }
+        discord = new DiscordWebhook(mon, logger);
     }
 
     /** Updates the resolver after reload. */
@@ -68,6 +80,10 @@ public final class ExecutionListener implements Listener {
     /** Drops per-player notification bookkeeping, e.g. on disconnect. */
     public void discard(UUID playerId) {
         throttle.forget(playerId);
+        DiscordWebhook hook = discord;
+        if (hook != null) {
+            hook.forget(playerId);
+        }
     }
 
     /** Blocks commands the player may not run. */
@@ -258,25 +274,46 @@ public final class ExecutionListener implements Listener {
             logger.info("blocked command '" + token + "' for " + player.getName()
                     + " (" + logLabel(reason) + ")");
         }
-        if (!mon.notifyStaff()) {
-            return;
-        }
-        StaffNotifier target = notifier;
-        if (target == null) {
-            return;
-        }
-        try {
-            if (!throttle.shouldNotify(player.getUniqueId(),
-                    System.currentTimeMillis(), mon.notifyCooldownMillis())) {
-                return;
+        if (mon.notifyStaff()) {
+            StaffNotifier target = notifier;
+            if (target != null) {
+                try {
+                    if (throttle.shouldNotify(player.getUniqueId(),
+                            System.currentTimeMillis(), mon.notifyCooldownMillis())) {
+                        target.notifyStaff(Messages.render(
+                                "<gray>[CmdGuard] <white>{player} <gray>tried <white>{cmd}",
+                                player.getName(), token));
+                    }
+                } catch (Exception ex) {
+                    logger.fine("staff notify failed: " + ex.getMessage());
+                }
             }
-            target.notifyStaff(Messages.render(
-                    "<gray>[CmdGuard] <white>{player} <gray>tried <white>{cmd}",
-                    player.getName(), token));
-        } catch (Exception ex) {
-            logger.fine("staff notify failed: " + ex.getMessage());
+        }
+        DiscordWebhook hook = discord;
+        if (hook != null) {
+            try {
+                hook.send(player.getUniqueId(), player.getName(), token, reason,
+                        primaryGroup(player));
+            } catch (Exception ex) {
+                logger.fine("discord notify failed: " + ex.getMessage());
+            }
         }
     }
+
+    /** Highest-priority group the player matches, or null when unknown. */
+    private String primaryGroup(Player player) {
+        GroupResolver current = resolver;
+        if (current == null) {
+            return null;
+        }
+        try {
+            List<String> groups = current.matchedGroups(player);
+            return groups.isEmpty() ? null : groups.get(groups.size() - 1);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
     /** Maps the public reason to the historical log label (behavior unchanged). */
     private static String logLabel(BlockReason reason) {
         if (reason == null) {

@@ -18,6 +18,61 @@ public final class ConfigValidator {
 
     private ConfigValidator() {}
 
+    /** Hosts a Discord webhook URL may legitimately use. */
+    private static final Set<String> DISCORD_HOSTS = Set.of(
+            "discord.com", "discordapp.com",
+            "canary.discord.com", "ptb.discord.com");
+
+    /**
+     * Validates the monitoring.discord section. Only warns while Discord is
+     * enabled, so a disabled (default) config stays silent.
+     *
+     * @param monitoring loaded monitoring settings, may be null
+     * @return warnings with exact config paths, empty when clean
+     */
+    public static List<String> validateDiscord(MonitoringConfig monitoring) {
+        List<String> out = new ArrayList<>();
+        if (monitoring == null || !monitoring.discordEnabled()) {
+            return out;
+        }
+        String url = monitoring.discordWebhookUrl();
+        if (url == null || url.trim().isEmpty()) {
+            out.add("monitoring.discord.webhook-url: discord is enabled but the URL is empty");
+            return out;
+        }
+        String trimmed = url.trim();
+        if (!trimmed.startsWith("https://")) {
+            out.add("monitoring.discord.webhook-url: URL must start with https://");
+            return out;
+        }
+        String host = hostOf(trimmed);
+        if (host == null || !DISCORD_HOSTS.contains(host)) {
+            out.add("monitoring.discord.webhook-url: '" + host
+                    + "' is not a Discord webhook host");
+        }
+        return out;
+    }
+
+    /** Extracts only the host of an https URL; never returns the secret path. */
+    private static String hostOf(String url) {
+        String rest = url.substring("https://".length());
+        int at = rest.indexOf('@');
+        if (at >= 0) {
+            rest = rest.substring(at + 1);
+        }
+        int end = rest.length();
+        int slash = rest.indexOf('/');
+        if (slash >= 0 && slash < end) {
+            end = slash;
+        }
+        int colon = rest.indexOf(':');
+        if (colon >= 0 && colon < end) {
+            end = colon;
+        }
+        String host = rest.substring(0, end).toLowerCase(Locale.ROOT);
+        return host.isEmpty() ? null : host;
+    }
+
     /**
      * Validates every group entry.
      *

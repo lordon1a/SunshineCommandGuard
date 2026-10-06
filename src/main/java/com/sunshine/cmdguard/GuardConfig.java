@@ -118,7 +118,7 @@ public final class GuardConfig {
         PrivacyRule helpCommand = readPrivacy(cfg, "privacy.help-command", warnings);
         AntiEnumerationConfig antiEnumeration = readAntiEnumeration(cfg, warnings);
         boolean permissionSync = cfg.getBoolean("permission-sync", false);
-        MonitoringConfig monitoring = readMonitoring(cfg);
+        MonitoringConfig monitoring = readMonitoring(cfg, warnings);
         UpdateConfig updates = readUpdates(cfg);
 
         Set<String> allowedTop = Set.of("enabled", "bypass-permission", "privacy",
@@ -222,7 +222,8 @@ public final class GuardConfig {
     }
 
     /** Reads the monitoring section with safe defaults (everything off). */
-    private static MonitoringConfig readMonitoring(FileConfiguration cfg) {
+    private static MonitoringConfig readMonitoring(FileConfiguration cfg,
+                                                   List<String> warnings) {
         boolean logBlocked = cfg.getBoolean("monitoring.log-blocked", false);
         boolean notifyStaff = cfg.getBoolean("monitoring.notify-staff", false);
         String notifyPermission = cfg.getString("monitoring.notify-permission",
@@ -231,7 +232,18 @@ public final class GuardConfig {
             notifyPermission = "sunshine.cmdguard.notify";
         }
         int cooldown = cfg.getInt("monitoring.notify-cooldown-seconds", 5);
-        return new MonitoringConfig(logBlocked, notifyStaff, notifyPermission, cooldown);
+        boolean discordEnabled = cfg.getBoolean("monitoring.discord.enabled", false);
+        String discordUrl = cfg.getString("monitoring.discord.webhook-url", "");
+        discordUrl = discordUrl == null ? "" : discordUrl.trim();
+        int discordCooldown = cfg.getInt("monitoring.discord.cooldown-seconds", 10);
+        int discordMax = cfg.getInt("monitoring.discord.max-per-minute", 20);
+        boolean discordOnlyRecon =
+                cfg.getBoolean("monitoring.discord.only-reconnaissance", false);
+        MonitoringConfig monitoring = new MonitoringConfig(logBlocked, notifyStaff,
+                notifyPermission, cooldown, discordEnabled, discordUrl, discordCooldown,
+                discordMax, discordOnlyRecon);
+        warnings.addAll(ConfigValidator.validateDiscord(monitoring));
+        return monitoring;
     }
 
     /** Reads the update-notification section (notify-only; all on by default). */

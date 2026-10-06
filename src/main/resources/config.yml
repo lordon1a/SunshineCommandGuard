@@ -17,6 +17,13 @@ monitoring:
   notify-staff: false
   notify-permission: "sunshine.cmdguard.notify"
   notify-cooldown-seconds: 5
+  # discord: post blocked attempts to a Discord channel via webhook.
+  discord:
+    enabled: false
+    webhook-url: ""
+    cooldown-seconds: 10     # per player
+    max-per-minute: 20       # whole webhook
+    only-reconnaissance: false  # true = only /pl, /ver and namespaced probes
 
 # update notifications: notify-only GitHub Releases check.
 # Nothing is ever downloaded or installed. Setting enabled: false
