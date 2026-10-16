@@ -66,8 +66,26 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
         grantSweepTask = CompatScheduler.runRepeating(this, this::sweepExpiredGrants,
                 GRANT_SWEEP_TICKS, GRANT_SWEEP_TICKS);
         CompatScheduler.runNextTick(this, this::reload);
+        registerPlaceholders();
         boolean filtering = config != null && config.enabled() && !filteringSuspended;
         getLogger().info("SunshineCommandGuard enabled; filtering=" + filtering);
+    }
+
+    /**
+     * Registers the PlaceholderAPI expansion only when PlaceholderAPI is
+     * enabled. The expansion class is referenced here but is only loaded when
+     * the plugin is present, so a missing PlaceholderAPI cannot break startup.
+     */
+    private void registerPlaceholders() {
+        try {
+            if (!getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
+                return;
+            }
+            CmdGuardPlaceholders.register(this);
+            getLogger().info("PlaceholderAPI expansion registered.");
+        } catch (Throwable ex) {
+            getLogger().warning("PlaceholderAPI hook failed: " + ex.getMessage());
+        }
     }
 
     @Override
@@ -93,7 +111,16 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
             return;
         }
         for (UUID playerId : affected) {
-            CompatScheduler.runNextTick(this, () -> refreshExpiredGrantCommands(playerId));
+            Player player;
+            try {
+                player = getServer().getPlayer(playerId);
+            } catch (Exception ex) {
+                continue;
+            }
+            if (player == null) {
+                continue;
+            }
+            CompatScheduler.runForPlayer(this, player, () -> refreshExpiredGrantCommands(playerId));
         }
     }
 
@@ -203,16 +230,18 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
             tabCompleteListener.setConfig(loaded);
         }
         for (Player p : getServer().getOnlinePlayers()) {
-            try {
-                fresh.rebuildSnapshot(p);
-            } catch (Exception ex) {
-                getLogger().fine("snapshot rebuild failed for " + p.getName());
-            }
-            try {
-                p.updateCommands();
-            } catch (Exception ex) {
-                getLogger().warning("updateCommands failed for " + p.getName());
-            }
+            CompatScheduler.runForPlayer(this, p, () -> {
+                try {
+                    fresh.rebuildSnapshot(p);
+                } catch (Exception ex) {
+                    getLogger().fine("snapshot rebuild failed for " + p.getName());
+                }
+                try {
+                    p.updateCommands();
+                } catch (Exception ex) {
+                    getLogger().warning("updateCommands failed for " + p.getName());
+                }
+            });
         }
         getLogger().info("SunshineCommandGuard reloaded; groups=" + loaded.groups().size()
                 + " warnings=" + loaded.warnings().size()
@@ -240,7 +269,7 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
      * Plugin version via the non-deprecated {@code getPluginMeta()} API.
      * Returns null (update check skipped) when the platform cannot supply it.
      */
-    private String pluginVersion() {
+    public String pluginVersion() {
         try {
             return getPluginMeta().getVersion();
         } catch (LinkageError | RuntimeException ex) {
@@ -362,11 +391,13 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
             }
         }
         for (Player p : getServer().getOnlinePlayers()) {
-            try {
-                p.updateCommands();
-            } catch (Exception ex) {
-                getLogger().warning("updateCommands failed for " + p.getName());
-            }
+            CompatScheduler.runForPlayer(this, p, () -> {
+                try {
+                    p.updateCommands();
+                } catch (Exception ex) {
+                    getLogger().warning("updateCommands failed for " + p.getName());
+                }
+            });
         }
     }
 
@@ -380,13 +411,16 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
             current.invalidate(player.getUniqueId());
             current.rebuildSnapshot(player);
         }
-        try {
-            player.updateCommands();
-        } catch (Exception ex) {
-            getLogger().warning("updateCommands failed for " + player.getName());
-            return false;
-        }
-        return true;
+        boolean[] ok = {true};
+        CompatScheduler.runForPlayer(this, player, () -> {
+            try {
+                player.updateCommands();
+            } catch (Exception ex) {
+                getLogger().warning("updateCommands failed for " + player.getName());
+                ok[0] = false;
+            }
+        });
+        return ok[0];
     }
 
     /**
@@ -401,16 +435,16 @@ public final class SunshineCommandGuard extends JavaPlugin implements StaffNotif
         if (current != null) {
             current.invalidate(playerId);
         }
-        CompatScheduler.runNextTick(this, () -> {
-            Player player;
-            try {
-                player = getServer().getPlayer(playerId);
-            } catch (Exception ex) {
-                return;
-            }
-            if (player == null) {
-                return;
-            }
+        Player player;
+        try {
+            player = getServer().getPlayer(playerId);
+        } catch (Exception ex) {
+            return;
+        }
+        if (player == null) {
+            return;
+        }
+        CompatScheduler.runForPlayer(this, player, () -> {
             GroupResolver fresh = resolver;
             if (fresh != null) {
                 try {

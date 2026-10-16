@@ -28,6 +28,16 @@ public final class GroupResolver {
      * path. Always refreshed together with the profile cache below.
      */
     private final Map<UUID, PermissionSnapshot> snapshots = new ConcurrentHashMap<>();
+    /**
+     * Cached resolved group name per player (highest-priority matched group).
+     * Read by the async PlaceholderAPI expansion; written on the main thread.
+     */
+    private final Map<UUID, String> groupNames = new ConcurrentHashMap<>();
+    /**
+     * Last computed visible-command count per player (recorded by the diagnose
+     * command). Async-safe; absent until first recorded.
+     */
+    private final Map<UUID, Integer> visibleCounts = new ConcurrentHashMap<>();
 
     /** Creates a resolver with config, plugin index and logger. */
     public GroupResolver(GuardConfig config, Map<String, Set<String>> pluginIndex,
@@ -91,6 +101,7 @@ public final class GroupResolver {
             return null;
         }
         cache.put(id, profile);
+        groupNames.put(id, matched.get(matched.size() - 1));
         rebuildSnapshot(player);
         return profile;
     }
@@ -102,6 +113,8 @@ public final class GroupResolver {
         }
         cache.remove(playerId);
         snapshots.remove(playerId);
+        groupNames.remove(playerId);
+        visibleCounts.remove(playerId);
         noGroupWarned.remove(playerId);
     }
 
@@ -109,6 +122,8 @@ public final class GroupResolver {
     public void invalidateAll() {
         cache.clear();
         snapshots.clear();
+        groupNames.clear();
+        visibleCounts.clear();
         noGroupWarned.clear();
     }
 
@@ -145,6 +160,34 @@ public final class GroupResolver {
             return null;
         }
         return cache.get(playerId);
+    }
+
+    /** Returns the cached resolved group name, or null. Async-safe. */
+    public String cachedGroup(UUID playerId) {
+        if (playerId == null) {
+            return null;
+        }
+        return groupNames.get(playerId);
+    }
+
+    /** Returns the last recorded visible count, or null. Async-safe. */
+    public Integer cachedVisibleCount(UUID playerId) {
+        if (playerId == null) {
+            return null;
+        }
+        return visibleCounts.get(playerId);
+    }
+
+    /** Records the diagnose-computed visible count for the placeholder. */
+    public void recordVisibleCount(UUID playerId, Integer count) {
+        if (playerId == null) {
+            return;
+        }
+        if (count == null) {
+            visibleCounts.remove(playerId);
+        } else {
+            visibleCounts.put(playerId, count);
+        }
     }
 
     /** Group names the player currently matches, in ascending priority order. */

@@ -9,6 +9,7 @@ version = "1.5.0"
 repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
+    maven("https://repo.extendedclip.com/releases/")
 }
 
 dependencies {
@@ -16,6 +17,7 @@ dependencies {
     // (Paper 26.x jars require Java 25 and would lock out most servers.)
     compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
     compileOnly("net.luckperms:api:5.4")
+    compileOnly("me.clip:placeholderapi:2.11.6")
 
     // Bundled into the jar (relocated below to avoid conflicts).
     implementation("org.bstats:bstats-bukkit:3.1.0")
