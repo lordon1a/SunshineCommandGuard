@@ -83,7 +83,7 @@ closes both doors without touching a single permission node you already have in 
 - **PlaceholderAPI** (2.0.0) — `%cmdguard_group%`, `%cmdguard_visible%`, `%cmdguard_filter%`
   for scoreboards, tab lists and holograms.
 - **Folia support** (2.0.0) — runs on Paper and Folia from the same jar.
-- **Live Web Editor** (2.0.0) — run `/cmdguard editor` to open your server's real command list in the **[Sunshine Live Web Studio](https://sunshine-mc.net/en/cmdguard/)**, toggle commands with one click (`Allow`, `Hide in Tab`, `Block`), and push changes live with `/cmdguard apply <code>` (includes a **3-day free trial** for every server, then unlocked indefinitely with **SunshineCommandGuard Pro**).
+- **Live Web Editor** (2.0.0) — run `/cmdguard editor` to open your server's real command list in the **[Sunshine Live Web Studio](https://sunshine-mc.net/en/cmdguard/)**, toggle commands with one click (`Allow`, `Hide in Tab`, `Block`), and push changes live with `/cmdguard apply <code>` (includes a **3-day free trial** for every server, then unlocked indefinitely with **SunshineCommandGuard Pro**). Your `pro-key` and Discord webhook URL are never uploaded (2.0.1+).
 - **Velocity networks (Pro)** — proxy-level command filtering (`/server`, `/glist`, `/send`, …)
   is available in **SunshineCommandGuard Pro** (see [Velocity networks (Pro)](#velocity-networks-pro)).
 - **Update notifications** — console and admin-join notice when a newer GitHub release
