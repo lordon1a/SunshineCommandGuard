@@ -22,6 +22,9 @@ closes both doors without touching a single permission node you already have in 
 - [Installation](#installation)
 - [Configuration examples](#configuration-examples)
 - [Commands and permissions](#commands-and-permissions)
+- [Discord alerts](#discord-alerts)
+- [PlaceholderAPI](#placeholderapi)
+- [Velocity networks (Pro)](#velocity-networks-pro)
 - [Frequently asked questions](#frequently-asked-questions)
 - [Compatibility](#compatibility)
 - [Building from source](#building-from-source)
@@ -48,7 +51,8 @@ closes both doors without touching a single permission node you already have in 
 - **Hidden aliases** — commands that stay fully runnable but disappear from tab-complete, for
   the aliases you don't want advertised but still need to work.
 - **Argument-level rules** — per-command `args` allow/deny lists, e.g. let players use
-  `/gamemode survival` but not `/gamemode creative`.
+  `/gamemode survival` but not `/gamemode creative`. Enforced in tab-complete **and** on
+  execution (2.0.0+), including namespaced forms and `/execute ... run`.
 - **Live verification** — `/cmdguard test <player> <command>` prints the resolved group, the
   matching rule, and the reason a command is visible or blocked, before you enable anything.
 - **One-command setup** — `/cmdguard generate` scans your live server and writes a reviewed
@@ -71,6 +75,16 @@ closes both doors without touching a single permission node you already have in 
   profile refreshing automatically on world change.
 - **Block monitoring** — log every blocked attempt and/or ping online staff (throttled), so
   reconnaissance attempts don't go unnoticed.
+- **Discord alerts** (2.0.0) — post blocked attempts to a Discord channel through a webhook,
+  rate-limited, with pings disabled and an option to report only `/pl`, `/ver` and namespaced
+  probes.
+- **Migrate in one command** (2.0.0) — `/cmdguard import commandwhitelist` converts a
+  CommandWhitelist config into a reviewable `config.imported.yml`.
+- **PlaceholderAPI** (2.0.0) — `%cmdguard_group%`, `%cmdguard_visible%`, `%cmdguard_filter%`
+  for scoreboards, tab lists and holograms.
+- **Folia support** (2.0.0) — runs on Paper and Folia from the same jar.
+- **Velocity networks (Pro)** — proxy-level command filtering (`/server`, `/glist`, `/send`, …)
+  is available in **SunshineCommandGuard Pro** (see [Velocity networks (Pro)](#velocity-networks-pro)).
 - **Update notifications** — console and admin-join notice when a newer GitHub release
   exists (notify-only; see below).
 - **bStats metrics** included, relocated so it never conflicts with another plugin's copy.
@@ -87,7 +101,8 @@ privacy messages are that server's own text, fully customizable in `config.yml`.
 
 ## Requirements
 
-- Paper (or a Paper fork) **1.21.x through 26.x**, Java **21** or newer (26.x servers run Java 25)
+- Paper, Folia or a Paper fork **1.21.x through 26.x**, Java **21** or newer (26.x servers run Java 25)
+- Optional: PlaceholderAPI for placeholders
 - LuckPerms is **optional** (`softdepend`): without it, every player falls back to the
   `default` group.
 - Players with the bypass permission or OP status skip all filtering — always test with a
@@ -95,13 +110,17 @@ privacy messages are that server's own text, fully customizable in `config.yml`.
 
 ## Installation
 
-1. Drop `SunshineCommandGuard-1.5.0.jar` into your `plugins/` folder and start the server once
+1. Drop `SunshineCommandGuard-2.0.0.jar` into your `plugins/` folder and start the server once
    (this creates the default `config.yml`).
-2. Run `/cmdguard setup` in-game and answer three questions — or run `/cmdguard generate`
-   and copy the useful parts of `config.generated.yml` into `config.yml`.
+2. Run `/cmdguard setup` in-game and answer three questions, run `/cmdguard generate`
+   to scan your server into `config.generated.yml`, or build a starter config in your browser with
+   the **[Online Config Builder](https://sunshine-mc.net/en/cmdguard/)**.
 3. Verify **before** enabling: `/cmdguard test <player> <command>` (or `/cmdguard diagnose`),
    with a non-OP test account.
 4. Set `enabled: true`, then `/cmdguard reload`.
+
+Coming from CommandWhitelist? Keep its folder in `plugins/`, run
+`/cmdguard import commandwhitelist`, and review `config.imported.yml` before copying it over.
 
 ## ⚠️ Warning
 
@@ -309,10 +328,11 @@ groups:
 | --- | --- | --- |
 | `/cmdguard reload` | `sunshine.cmdguard.admin` | Reload config, rebuild index, clear caches |
 | `/cmdguard refresh <player>` | `sunshine.cmdguard.admin` | Drop one player's cache, resend command tree |
-| `/cmdguard test <player> <command>` | `sunshine.cmdguard.admin` | Show groups, visibility, reason for a command |
+| `/cmdguard test <player> <command> [args]` | `sunshine.cmdguard.admin` | Show groups, visibility, reason (and argument rule) for a command |
 | `/cmdguard debug` | `sunshine.cmdguard.admin` | Suspend/resume filtering at runtime (no config write) |
 | `/cmdguard dump` | `sunshine.cmdguard.admin` | Write all registered commands to `commands_dump.yml` |
 | `/cmdguard generate` | `sunshine.cmdguard.admin` | Write a review-ready starter config to `config.generated.yml` |
+| `/cmdguard import commandwhitelist` | `sunshine.cmdguard.admin` | Convert a CommandWhitelist config into `config.imported.yml` |
 | `/cmdguard grant <player> <command> <30s\|10m\|2h\|1d>` | `sunshine.cmdguard.admin` | Temporarily allow one command (memory-only, lost on restart) |
 | `/cmdguard ungrant <player> [command]` | `sunshine.cmdguard.admin` | Revoke one or all temporary grants |
 | `/cmdguard setup` | `sunshine.cmdguard.admin` | Interactive chat setup (players only): starter list, privacy, sync, anti-enumeration |
@@ -324,6 +344,39 @@ groups:
 | `sunshine.cmdguard.admin` | op | Allows use of `/cmdguard` |
 | `sunshine.cmdguard.notify` | op | Receives blocked-command staff notifications |
 | `sunshine.cmdguard.group.<name>` | — | Assigns a player to group `<name>` (via LuckPerms) |
+
+## Discord alerts
+
+```yaml
+monitoring:
+  discord:
+    enabled: true
+    webhook-url: "https://discord.com/api/webhooks/..."
+    cooldown-seconds: 10        # per player
+    max-per-minute: 20          # whole webhook
+    only-reconnaissance: false  # true = only /pl, /ver and namespaced probes
+```
+
+Each alert looks like ``🚫 **Steve** tried `/plugins` — privacy (group: default)``. Mentions
+are disabled, requests are asynchronous, and the webhook URL is never written to the log.
+
+## PlaceholderAPI
+
+| Placeholder | Value |
+| --- | --- |
+| `%cmdguard_group%` | The player's highest-priority group |
+| `%cmdguard_visible%` | Number of commands the player can see |
+| `%cmdguard_filter%` | `enabled` or `disabled` |
+
+## Velocity networks (Pro)
+
+Velocity's own proxy commands (`/server`, `/glist`, `/send`, …) are handled on the proxy and
+never reach the backend Paper server, so a backend plugin cannot hide or block them.
+
+**SunshineCommandGuard Pro** adds the companion Velocity proxy plugin with the same group
+rules (literals, `regex:`, `!deny`, `inherit`, `priority`), `sunshine.cmdguard.group.<name>`
+LuckPerms permissions, and `/cmdguardv reload|test` diagnostics, while passing all backend
+commands through to the Paper plugin.
 
 ## Frequently asked questions
 
@@ -357,9 +410,9 @@ player resolves to the `default` group.
 ## Compatibility
 
 Built against the **Paper 1.21.4 API (Java 21)**. Tested on a clean Paper 26.2 server.
-Paper and compatible Paper forks supported. Folia support is not currently guaranteed:
-the plugin targets the Bukkit scheduler and main-thread player APIs. Older/newer server
-versions are untested — please open an issue with what works or doesn't on your setup.
+Paper, Folia (2.0.0+, via per-player entity scheduling) and compatible Paper forks are
+supported. Older/newer server versions are untested — please open an issue with what works or
+doesn't on your setup.
 
 ## Developer API (1.4.0+)
 
@@ -369,7 +422,8 @@ CommandGuard fires a public monitoring event for integrations such as
 - `com.sunshine.commandguard.api.event.CommandGuardBlockedEvent` — fired **exactly once** after a
   command attempt is definitively blocked, with `getPlayerId()`, `getPlayerName()`,
   `getCommandToken()`, `getReason()` (`com.sunshine.commandguard.api.BlockReason`),
-  `getTimestamp()` and `getWorld()`.
+  `getTimestamp()` and `getWorld()`. `BlockReason` is one of `PRIVACY`,
+  `NAMESPACE_PROTECTION`, `PERMISSION_SYNC`, `GROUP_LIST` and (2.0.0+) `ARGUMENT_RULE`.
 - **Non-cancellable** — listeners observe the decision, they can never unblock a command.
 - The token is the **normalized root command** with all arguments stripped and the namespace
   preserved: `/plugins` → `plugins`, `/BUKKIT:Plugins` → `bukkit:plugins`,
@@ -379,7 +433,7 @@ CommandGuard fires a public monitoring event for integrations such as
 ## Building from source
 
 ```powershell
-.\gradlew.bat build   # needs JDK 21, output: build/libs/SunshineCommandGuard-1.5.0.jar
+.\gradlew.bat build   # needs JDK 21, output: build/libs/SunshineCommandGuard-2.0.0.jar
 .\gradlew.bat test    # unit tests (JUnit 5)
 ```
 

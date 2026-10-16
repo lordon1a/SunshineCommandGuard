@@ -2,6 +2,51 @@
 
 All notable changes to SunshineCommandGuard are documented here.
 
+## [2.0.0] - 2026-10-16
+
+Migration, integrations and execution-level argument filtering. This release
+adds a CommandWhitelist importer, Discord alerts, PlaceholderAPI placeholders
+and Folia support. It also closes a gap where argument rules were only applied
+to tab-completion.
+
+### Upgrade notes
+
+- **Argument rules now block execution.** `args` rules used to filter only
+  tab-completion; a player could still type `/gamemode creative` in full. From
+  2.0.0 the first argument of an allowed command is checked when it runs, too.
+  If you relied on the old behavior, review your `args` sections and test with
+  `/cmdguard test <player> gamemode creative` before upgrading a live server.
+- **API:** `BlockReason` has a new constant, `ARGUMENT_RULE`. Integrations that
+  `switch` over `BlockReason` should handle it or keep a `default` branch.
+- Existing `config.yml` files keep working. The new `monitoring.discord`
+  section is optional and off when missing.
+
+### Added
+
+- **`/cmdguard import commandwhitelist`** reads
+  `plugins/CommandWhitelist/config.yml` and writes a reviewable
+  `config.imported.yml`: groups, commands, and blocked sub-commands as `args`
+  deny rules, plus the LuckPerms commands to grant each group. `config.yml` is
+  never touched.
+- **Discord alerts** for blocked attempts via webhook
+  (`monitoring.discord`): per-player cooldown, per-minute cap, rate-limit
+  (HTTP 429) back-off, mentions disabled, and an `only-reconnaissance` mode that
+  posts only `/plugins`, `/version` and namespaced probes. The webhook URL is
+  never written to the log.
+- **PlaceholderAPI** placeholders: `%cmdguard_group%`, `%cmdguard_visible%`,
+  `%cmdguard_filter%`. They read cached data only, so they are safe on
+  asynchronous scoreboards.
+- **Folia support** (`folia-supported: true`). Per-player work runs on the
+  player's own scheduler on Folia; behavior on Paper is unchanged.
+- `/cmdguard test <player> <command> [args...]` shows whether the argument
+  rule allows the first argument.
+
+### Fixed
+
+- Security: `args` deny/allow rules are enforced on execution, including
+  namespaced forms (`/minecraft:gamemode creative`) and `/execute ... run`
+  payloads.
+
 ## [1.5.0] - 2026-09-27
 
 Paper 26.x support and a security hardening pass. One jar runs on Paper
@@ -204,11 +249,13 @@ reports one unknown-key warning).
 
 - Initial public release.
 
-[1.2.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.2.0
+[2.0.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v2.0.0
+[1.5.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.5.0
 [1.4.3]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.4.3
 [1.4.2]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.4.2
 [1.4.1]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.4.1
 [1.4.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.4.0
 [1.3.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.3.0
+[1.2.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.2.0
 [1.1.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.1.0
 [1.0.0]: https://github.com/lordon1a/SunshineCommandGuard/releases/tag/v1.0.0
