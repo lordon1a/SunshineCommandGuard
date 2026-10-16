@@ -40,6 +40,11 @@ to tab-completion.
   player's own scheduler on Folia; behavior on Paper is unchanged.
 - `/cmdguard test <player> <command> [args...]` shows whether the argument
   rule allows the first argument.
+- **Live Web Editor (`/cmdguard editor` & `/cmdguard apply <code>`)**: uploads
+  your server's registered commands and current `config.yml` to
+  `https://sunshine-mc.net/en/cmdguard/` so you can allow, hide, or block
+  commands in your browser and apply them live with automatic backup (includes a
+  3-day free trial per server, then unlocked with a `pro-key`).
 
 ### Fixed
 

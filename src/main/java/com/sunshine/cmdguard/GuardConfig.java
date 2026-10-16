@@ -16,6 +16,7 @@ public final class GuardConfig {
 
     private final boolean enabled;
     private final String bypassPermission;
+    private final String proKey;
     private final PrivacyRule pluginsCommand;
     private final PrivacyRule helpCommand;
     private final AntiEnumerationConfig antiEnumeration;
@@ -25,7 +26,7 @@ public final class GuardConfig {
     private final Map<String, GroupDef> groups;
     private final List<String> warnings;
 
-    private GuardConfig(boolean enabled, String bypassPermission,
+    private GuardConfig(boolean enabled, String bypassPermission, String proKey,
                         PrivacyRule pluginsCommand, PrivacyRule helpCommand,
                         AntiEnumerationConfig antiEnumeration,
                         boolean permissionSync, MonitoringConfig monitoring,
@@ -33,6 +34,7 @@ public final class GuardConfig {
                         Map<String, GroupDef> groups, List<String> warnings) {
         this.enabled = enabled;
         this.bypassPermission = bypassPermission;
+        this.proKey = proKey == null ? "" : proKey.trim();
         this.pluginsCommand = pluginsCommand;
         this.helpCommand = helpCommand;
         this.antiEnumeration = antiEnumeration;
@@ -51,6 +53,11 @@ public final class GuardConfig {
     /** Returns the bypass permission node. */
     public String bypassPermission() {
         return bypassPermission;
+    }
+
+    /** Returns the optional SunshineCommandGuard Pro license key. */
+    public String proKey() {
+        return proKey;
     }
 
     /** Returns the plugins-command privacy rule. */
@@ -101,7 +108,7 @@ public final class GuardConfig {
         PrivacyRule emptyHelp = new PrivacyRule(false, "", Set.of());
         if (cfg == null) {
             warnings.add("no 'default' group defined; filtering disabled");
-            return new GuardConfig(false, defaultBypass, emptyPlugins, emptyHelp,
+            return new GuardConfig(false, defaultBypass, "", emptyPlugins, emptyHelp,
                     AntiEnumerationConfig.defaults(),
                     false, MonitoringConfig.disabled(), UpdateConfig.defaults(),
                     Map.of(), warnings);
@@ -113,6 +120,10 @@ public final class GuardConfig {
         if (bypass == null || bypass.trim().isEmpty()) {
             bypass = defaultBypass;
         }
+        String proKey = cfg.getString("pro-key", "");
+        if (proKey == null) {
+            proKey = "";
+        }
 
         PrivacyRule pluginsCommand = readPrivacy(cfg, "privacy.plugins-command", warnings);
         PrivacyRule helpCommand = readPrivacy(cfg, "privacy.help-command", warnings);
@@ -121,7 +132,7 @@ public final class GuardConfig {
         MonitoringConfig monitoring = readMonitoring(cfg, warnings);
         UpdateConfig updates = readUpdates(cfg);
 
-        Set<String> allowedTop = Set.of("enabled", "bypass-permission", "privacy",
+        Set<String> allowedTop = Set.of("enabled", "bypass-permission", "pro-key", "privacy",
                 "anti-enumeration", "groups",
                 "permission-sync", "monitoring", "updates");
         for (String key : cfg.getKeys(false)) {
@@ -185,7 +196,7 @@ public final class GuardConfig {
             }
         }
 
-        return new GuardConfig(enabled, bypass, pluginsCommand, helpCommand,
+        return new GuardConfig(enabled, bypass, proKey, pluginsCommand, helpCommand,
                 antiEnumeration,
                 permissionSync, monitoring, updates, groups, warnings);
     }

@@ -8,8 +8,8 @@ description: Command visibility, access control and server privacy.
 softdepend: [LuckPerms, PlaceholderAPI]
 commands:
   cmdguard:
-    description: Command guard administration (reload, refresh, test, debug, dump, generate, import, grant, ungrant, setup, diagnose).
-    usage: /cmdguard <reload|refresh|test|debug|dump|generate|import|grant|ungrant|setup|diagnose>
+    description: Command guard administration (reload, refresh, test, debug, dump, generate, import, grant, ungrant, setup, diagnose, editor, apply).
+    usage: /cmdguard <reload|refresh|test|debug|dump|generate|import|grant|ungrant|setup|diagnose|editor|apply>
     permission: sunshine.cmdguard.admin
 permissions:
   sunshine.cmdguard.bypass:

@@ -17,6 +17,7 @@ import org.bukkit.entity.Player;
 public final class GuardCommand implements TabExecutor {
 
     private final SunshineCommandGuard plugin;
+    private final LiveEditorClient editorClient = new LiveEditorClient();
 
     /** Creates the command with its owning plugin. */
     public GuardCommand(SunshineCommandGuard plugin) {
@@ -30,7 +31,7 @@ public final class GuardCommand implements TabExecutor {
             return true;
         }
         if (args.length == 0) {
-            sender.sendMessage("Usage: /cmdguard <reload|refresh|test|debug|dump|generate|import|grant|ungrant|setup|diagnose>");
+            sender.sendMessage("Usage: /cmdguard <reload|refresh|test|debug|dump|generate|import|grant|ungrant|setup|diagnose|editor|apply>");
             return true;
         }
         String sub = args[0].toLowerCase(java.util.Locale.ROOT);
@@ -382,11 +383,127 @@ public final class GuardCommand implements TabExecutor {
                 runDiagnose(sender, target);
                 return true;
             }
+            case "editor": {
+                runEditorSession(sender);
+                return true;
+            }
+            case "apply": {
+                if (args.length < 2 || args[1].trim().isEmpty()) {
+                    sender.sendMessage("Usage: /cmdguard apply <code>");
+                    return true;
+                }
+                runApplySession(sender, args[1].trim());
+                return true;
+            }
             default: {
-                sender.sendMessage("Usage: /cmdguard <reload|refresh|test|debug|dump|generate|import|grant|ungrant|setup|diagnose>");
+                sender.sendMessage("Usage: /cmdguard <reload|refresh|test|debug|dump|generate|import|grant|ungrant|setup|diagnose|editor|apply>");
                 return true;
             }
         }
+    }
+
+    /** Uploads the server's registered commands and config.yml to the Sunshine Live Web Editor. */
+    private void runEditorSession(CommandSender sender) {
+        Map<String, CommandScan.Entry> scan;
+        try {
+            scan = CommandScan.scan(plugin.getServer());
+        } catch (Exception ex) {
+            sender.sendMessage("Editor scan failed; see server log.");
+            return;
+        }
+        File dir = plugin.getDataFolder();
+        String serverId = LiveEditorClient.getOrCreateServerId(dir);
+        String serverName;
+        try {
+            serverName = plugin.getServer().getName();
+        } catch (Exception ex) {
+            serverName = "Minecraft Server";
+        }
+        GuardConfig cfg = plugin.getGuardConfig();
+        String proKey = cfg == null ? "" : cfg.proKey();
+        String configYaml = "";
+        try {
+            File cfgFile = new File(dir, "config.yml");
+            if (cfgFile.isFile()) {
+                configYaml = java.nio.file.Files.readString(
+                        cfgFile.toPath(), java.nio.charset.StandardCharsets.UTF_8);
+            }
+        } catch (Exception ex) {
+            configYaml = "";
+        }
+        final String finalServerName = serverName;
+        final String finalConfigYaml = configYaml;
+        sender.sendMessage("Opening Live Web Editor session (" + scan.size() + " commands)...");
+        Thread worker = new Thread(() -> {
+            try {
+                LiveEditorClient.SessionCreated created = editorClient.createSession(
+                        serverId, finalServerName, proKey, finalConfigYaml, scan);
+                CompatScheduler.runNextTick(plugin, () -> {
+                    sender.sendMessage("Live Web Editor ready: " + created.editorUrl());
+                    if ("pro".equalsIgnoreCase(created.tier())) {
+                        sender.sendMessage("License: Pro Active (Unlimited Live Web Apply)");
+                    } else if (created.canApplyLive()) {
+                        long hours = Math.max(1L, created.trialRemainingSeconds() / 3600L);
+                        sender.sendMessage("3-Day Free Trial active (" + hours
+                                + "h remaining). Toggle commands in your browser, click Save, and run /cmdguard apply <code>.");
+                    } else {
+                        sender.sendMessage("3-Day Free Trial ended. Enter your Pro key in the web editor or config.yml (pro-key) to use /cmdguard apply, or copy config.yml manually.");
+                    }
+                    try {
+                        net.kyori.adventure.text.Component clickable = net.kyori.adventure.text.Component
+                                .text("[Click to open SunshineCommandGuard Live Web Studio]")
+                                .color(net.kyori.adventure.text.format.NamedTextColor.GOLD)
+                                .clickEvent(net.kyori.adventure.text.event.ClickEvent.openUrl(created.editorUrl()));
+                        sender.sendMessage(clickable);
+                    } catch (Throwable ignored) {
+                        // Plain-text URL already sent above.
+                    }
+                });
+            } catch (Exception ex) {
+                plugin.getLogger().warning("editor session failed: " + ex.getMessage());
+                CompatScheduler.runNextTick(plugin, () ->
+                        sender.sendMessage("Live Web Editor request failed: " + ex.getMessage()));
+            }
+        }, "sunshine-cmdguard-editor");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    /** Downloads a saved web configuration by its one-time code, backs up config.yml, and reloads. */
+    private void runApplySession(CommandSender sender, String applyCode) {
+        sender.sendMessage("Downloading configuration for apply code " + applyCode + "...");
+        Thread worker = new Thread(() -> {
+            try {
+                LiveEditorClient.ApplyPayload payload = editorClient.fetchApplyPayload(applyCode);
+                YamlConfiguration parsed = new YamlConfiguration();
+                parsed.loadFromString(payload.configYaml());
+                GuardConfig validated = GuardConfig.load(parsed);
+                if (validated.groups().isEmpty()) {
+                    throw new IllegalStateException("Downloaded config defines no valid groups.");
+                }
+                CompatScheduler.runNextTick(plugin, () -> {
+                    try {
+                        String backupName = LiveEditorClient.backupAndWriteConfig(
+                                plugin.getDataFolder(), payload.configYaml());
+                        plugin.reload();
+                        GuardConfig reloaded = plugin.getGuardConfig();
+                        int groups = reloaded == null ? 0 : reloaded.groups().size();
+                        int warnings = reloaded == null ? 0 : reloaded.warnings().size();
+                        sender.sendMessage("Applied live configuration (backup: " + backupName
+                                + "); groups=" + groups + " warnings=" + warnings);
+                    } catch (Exception writeEx) {
+                        plugin.getLogger().warning("apply write failed: " + writeEx.getMessage());
+                        sender.sendMessage("Failed to write config.yml: " + writeEx.getMessage());
+                    }
+                });
+            } catch (Exception ex) {
+                plugin.getLogger().warning("apply failed: " + ex.getMessage());
+                CompatScheduler.runNextTick(plugin, () ->
+                        sender.sendMessage("Apply failed: " + ex.getMessage()));
+            }
+        }, "sunshine-cmdguard-apply");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     /** Writes every registered root command to commands_dump.yml for the config generator. */
@@ -426,7 +543,7 @@ public final class GuardCommand implements TabExecutor {
         if (args.length == 1) {
             String prefix = args[0].toLowerCase(java.util.Locale.ROOT);
             List<String> subs = Arrays.asList("reload", "refresh", "test", "debug", "dump",
-                    "generate", "import", "grant", "ungrant", "setup", "diagnose");
+                    "generate", "import", "grant", "ungrant", "setup", "diagnose", "editor", "apply");
             List<String> out = new ArrayList<>();
             for (String s : subs) {
                 if (s.startsWith(prefix)) {

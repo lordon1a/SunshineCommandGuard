@@ -5,6 +5,10 @@ enabled: false
 
 bypass-permission: "sunshine.cmdguard.bypass"
 
+# pro-key: optional SunshineCommandGuard Pro license key for unlimited Live Web
+# Editor (/cmdguard editor & /cmdguard apply) after your server's 3-day free trial.
+pro-key: ""
+
 # permission-sync: also require each command's own Bukkit permission node.
 # A command is hidden/blocked unless the group allows it AND the player holds
 # the permission the owning plugin registered for it. Commands with no known

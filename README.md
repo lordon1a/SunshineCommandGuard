@@ -83,6 +83,7 @@ closes both doors without touching a single permission node you already have in 
 - **PlaceholderAPI** (2.0.0) — `%cmdguard_group%`, `%cmdguard_visible%`, `%cmdguard_filter%`
   for scoreboards, tab lists and holograms.
 - **Folia support** (2.0.0) — runs on Paper and Folia from the same jar.
+- **Live Web Editor** (2.0.0) — run `/cmdguard editor` to open your server's real command list in the **[Sunshine Live Web Studio](https://sunshine-mc.net/en/cmdguard/)**, toggle commands with one click (`Allow`, `Hide in Tab`, `Block`), and push changes live with `/cmdguard apply <code>` (includes a **3-day free trial** for every server, then unlocked indefinitely with **SunshineCommandGuard Pro**).
 - **Velocity networks (Pro)** — proxy-level command filtering (`/server`, `/glist`, `/send`, …)
   is available in **SunshineCommandGuard Pro** (see [Velocity networks (Pro)](#velocity-networks-pro)).
 - **Update notifications** — console and admin-join notice when a newer GitHub release
@@ -337,6 +338,8 @@ groups:
 | `/cmdguard ungrant <player> [command]` | `sunshine.cmdguard.admin` | Revoke one or all temporary grants |
 | `/cmdguard setup` | `sunshine.cmdguard.admin` | Interactive chat setup (players only): starter list, privacy, sync, anti-enumeration |
 | `/cmdguard diagnose [player]` | `sunshine.cmdguard.admin` | Common-mistake check with live counts and anti-enumeration status |
+| `/cmdguard editor` | `sunshine.cmdguard.admin` | Upload registered commands & `config.yml` to the [Live Web Studio](https://sunshine-mc.net/en/cmdguard/) (3-day free trial + Pro) |
+| `/cmdguard apply <code>` | `sunshine.cmdguard.admin` | Back up `config.yml` and apply changes saved in the Live Web Studio |
 
 | Permission | Default | Description |
 | --- | --- | --- |

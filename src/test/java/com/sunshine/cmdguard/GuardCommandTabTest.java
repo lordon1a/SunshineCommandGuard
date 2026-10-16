@@ -56,4 +56,15 @@ class GuardCommandTabTest {
                 new String[]{"import", "command"});
         assertEquals(List.of("commandwhitelist"), out);
     }
+
+    @Test
+    void editorAndApplySubcommandsAreListed() {
+        List<String> ed = command().onTabComplete(admin(), null, "cmdguard",
+                new String[]{"ed"});
+        assertEquals(List.of("editor"), ed);
+
+        List<String> ap = command().onTabComplete(admin(), null, "cmdguard",
+                new String[]{"ap"});
+        assertEquals(List.of("apply"), ap);
+    }
 }
