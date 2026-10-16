@@ -2,6 +2,26 @@
 
 All notable changes to SunshineCommandGuard are documented here.
 
+## [2.0.1] - 2026-10-16
+
+Privacy fix for the Live Web Editor. Upgrading is recommended for everyone who
+uses `/cmdguard editor`.
+
+### Fixed
+
+- **`/cmdguard editor` no longer uploads secrets.** Your `pro-key` and
+  `monitoring.discord.webhook-url` are blanked before `config.yml` is sent to the
+  web editor. `/cmdguard apply` puts your local values back, so applying a web
+  config never wipes them. A value you type into the web editor still wins.
+- `/cmdguard editor` refuses to upload a `config.yml` that is not valid YAML and
+  tells you to fix it first, instead of sending the raw file.
+- Commands from your server now show up in the web editor. Before, the editor
+  could fall back to its demo command list. This was fixed on the website, so
+  2.0.0 benefits too.
+
+If you ran `/cmdguard editor` on 2.0.0 with a Discord webhook configured, create
+a new webhook in Discord and replace the old URL.
+
 ## [2.0.0] - 2026-10-16
 
 Migration, integrations and execution-level argument filtering. This release

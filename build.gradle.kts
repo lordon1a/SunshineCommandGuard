@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.sunshine"
-version = "2.0.0"
+version = "2.0.1"
 
 repositories {
     mavenCentral()
@@ -45,7 +45,7 @@ tasks.test {
 
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
     archiveClassifier.set("")
-    archiveFileName.set("SunshineCommandGuard-2.0.0.jar")
+    archiveFileName.set("SunshineCommandGuard-2.0.1.jar")
     relocate("org.bstats", "com.sunshine.cmdguard.bstats")
     mergeServiceFiles()
 }

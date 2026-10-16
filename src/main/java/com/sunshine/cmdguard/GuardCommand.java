@@ -431,6 +431,14 @@ public final class GuardCommand implements TabExecutor {
         } catch (Exception ex) {
             configYaml = "";
         }
+        if (!configYaml.isEmpty()) {
+            try {
+                configYaml = LiveEditorClient.redactSecrets(configYaml);
+            } catch (Exception ex) {
+                sender.sendMessage("config.yml is not valid YAML, so it was not uploaded. Fix it first; /cmdguard reload shows the error.");
+                return;
+            }
+        }
         final String finalServerName = serverName;
         final String finalConfigYaml = configYaml;
         sender.sendMessage("Opening Live Web Editor session (" + scan.size() + " commands)...");
@@ -483,8 +491,14 @@ public final class GuardCommand implements TabExecutor {
                 }
                 CompatScheduler.runNextTick(plugin, () -> {
                     try {
+                        File cfgFile = new File(plugin.getDataFolder(), "config.yml");
+                        String local = cfgFile.isFile()
+                                ? java.nio.file.Files.readString(cfgFile.toPath(), java.nio.charset.StandardCharsets.UTF_8)
+                                : "";
+                        // The upload had the Pro key and webhook URL blanked; keep the local ones.
+                        String merged = LiveEditorClient.restoreSecrets(payload.configYaml(), local);
                         String backupName = LiveEditorClient.backupAndWriteConfig(
-                                plugin.getDataFolder(), payload.configYaml());
+                                plugin.getDataFolder(), merged);
                         plugin.reload();
                         GuardConfig reloaded = plugin.getGuardConfig();
                         int groups = reloaded == null ? 0 : reloaded.groups().size();

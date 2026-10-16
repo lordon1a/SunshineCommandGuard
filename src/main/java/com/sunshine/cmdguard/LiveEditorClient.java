@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.bukkit.configuration.InvalidConfigurationException;
+import org.bukkit.configuration.file.YamlConfiguration;
 
 /**
  * Client for the SunshineCommandGuard Live Web Editor
@@ -28,6 +30,11 @@ public final class LiveEditorClient {
 
     /** Default SunshineCommandGuard Live Studio API base URL. */
     public static final String DEFAULT_API_BASE = "https://sunshine-mc.net/api/cmdguard";
+
+    /** Config paths whose values are never uploaded to the web editor. */
+    static final List<String> SECRET_PATHS = List.of("pro-key", "monitoring.discord.webhook-url");
+
+    private static final String USER_AGENT = "SunshineCommandGuard/2.0.1";
 
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
     private static final Pattern APPLY_CODE_PATTERN = Pattern.compile("^[A-Za-z0-9_-]{6,32}$");
@@ -155,7 +162,7 @@ public final class LiveEditorClient {
                 .uri(URI.create(apiBase + "/session/create"))
                 .timeout(TIMEOUT)
                 .header("Content-Type", "application/json; charset=utf-8")
-                .header("User-Agent", "SunshineCommandGuard/2.0.0")
+                .header("User-Agent", USER_AGENT)
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build();
         HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
@@ -185,7 +192,7 @@ public final class LiveEditorClient {
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(apiBase + "/apply/" + clean))
                 .timeout(TIMEOUT)
-                .header("User-Agent", "SunshineCommandGuard/2.0.0")
+                .header("User-Agent", USER_AGENT)
                 .GET()
                 .build();
         HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
@@ -215,6 +222,47 @@ public final class LiveEditorClient {
         }
         Files.writeString(configFile.toPath(), newYaml, StandardCharsets.UTF_8);
         return backupName;
+    }
+
+    /**
+     * Blanks every {@link #SECRET_PATHS} value so the Pro key and Discord webhook
+     * never leave the server. Throws if {@code yaml} is not valid YAML, so a broken
+     * file is never uploaded as raw text.
+     */
+    public static String redactSecrets(String yaml) throws InvalidConfigurationException {
+        YamlConfiguration cfg = new YamlConfiguration();
+        cfg.loadFromString(yaml == null ? "" : yaml);
+        for (String path : SECRET_PATHS) {
+            if (cfg.isSet(path)) {
+                cfg.set(path, "");
+            }
+        }
+        return cfg.saveToString();
+    }
+
+    /**
+     * Puts the local secret values back into a config downloaded from the web
+     * editor wherever the editor left them blank. A value entered in the editor wins.
+     */
+    public static String restoreSecrets(String downloaded, String local) throws InvalidConfigurationException {
+        YamlConfiguration in = new YamlConfiguration();
+        in.loadFromString(downloaded);
+        YamlConfiguration current = new YamlConfiguration();
+        try {
+            current.loadFromString(local == null ? "" : local);
+        } catch (InvalidConfigurationException ex) {
+            return downloaded;
+        }
+        boolean changed = false;
+        for (String path : SECRET_PATHS) {
+            String incoming = in.getString(path, "");
+            String kept = current.getString(path, "");
+            if ((incoming == null || incoming.isBlank()) && kept != null && !kept.isBlank()) {
+                in.set(path, kept);
+                changed = true;
+            }
+        }
+        return changed ? in.saveToString() : downloaded;
     }
 
     /** Escapes a Java string as a JSON string literal (including surrounding quotes). */

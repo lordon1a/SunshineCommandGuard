@@ -111,7 +111,7 @@ privacy messages are that server's own text, fully customizable in `config.yml`.
 
 ## Installation
 
-1. Drop `SunshineCommandGuard-2.0.0.jar` into your `plugins/` folder and start the server once
+1. Drop `SunshineCommandGuard-2.0.1.jar` into your `plugins/` folder and start the server once
    (this creates the default `config.yml`).
 2. Run `/cmdguard setup` in-game and answer three questions, run `/cmdguard generate`
    to scan your server into `config.generated.yml`, or build a starter config in your browser with
@@ -436,7 +436,7 @@ CommandGuard fires a public monitoring event for integrations such as
 ## Building from source
 
 ```powershell
-.\gradlew.bat build   # needs JDK 21, output: build/libs/SunshineCommandGuard-2.0.0.jar
+.\gradlew.bat build   # needs JDK 21, output: build/libs/SunshineCommandGuard-2.0.1.jar
 .\gradlew.bat test    # unit tests (JUnit 5)
 ```
 
